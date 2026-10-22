@@ -24,8 +24,6 @@ export default defineConfig({
         // (portrait) and a TV (landscape) — locking one orientation would be
         // wrong for the other.
         orientation: 'any',
-        background_color: '#0b0b0f',
-        theme_color: '#0b0b0f',
         icons: [
           {
             src: 'icons/icon.svg',
@@ -42,7 +40,7 @@ export default defineConfig({
         // CacheFirst that's right for images.
         runtimeCaching: [
           {
-            urlPattern: /\/v1\/(storefront|content|collections)/,
+            urlPattern: /\/v1\/(storefront|launch|collections)/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'delivery-api',
@@ -75,7 +73,8 @@ export default defineConfig({
     // same-origin so this works inside a sandboxed preview pane, not just a
     // normal browser tab.
     proxy: {
-      '/v1': { target: 'http://localhost:8000', changeOrigin: true },
+      '/v1': { target: process.env.VITE_PROXY_TARGET || 'https://3-109-241-147.sslip.io', changeOrigin: true, secure: true },
+      '/image': { target: process.env.VITE_PROXY_TARGET || 'https://3-109-241-147.sslip.io', changeOrigin: true, secure: true },
     },
   },
 });

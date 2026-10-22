@@ -13,9 +13,7 @@ import { useEffect, useRef, useState } from 'react';
  * handful, which is also just how every real OTT app behaves — nobody
  * fetches row 18 before the user has scrolled past row 3.
  */
-export function useInView<T extends HTMLElement>(
-  rootMargin = '600px 0px',
-): [React.RefObject<T | null>, boolean] {
+export function useInView<T extends HTMLElement>(rootMargin = '600px 0px'): [React.RefObject<T>, boolean] {
   const ref = useRef<T | null>(null);
   const [inView, setInView] = useState(false);
 
@@ -34,5 +32,5 @@ export function useInView<T extends HTMLElement>(
     return () => observer.disconnect();
   }, [inView, rootMargin]);
 
-  return [ref, inView];
+  return [ref as React.RefObject<T>, inView];
 }

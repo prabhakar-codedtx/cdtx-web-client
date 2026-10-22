@@ -1,17 +1,22 @@
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Provider } from 'react-redux';
-import { ThemeProvider } from 'styled-components';
 import { store } from '@/app/store';
-import { theme } from '@/theme/theme';
-import { GlobalStyle } from '@/theme/GlobalStyle';
-import { HomeScreen } from '@/features/home/HomeScreen';
+import { Shell } from '@/screens/Shell';
+import { DetailRoute, TabRoute } from '@/screens/Routes';
 
 export function App() {
   return (
     <Provider store={store}>
-      <ThemeProvider theme={theme}>
-        <GlobalStyle />
-        <HomeScreen />
-      </ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Shell />}>
+            <Route index element={<TabRoute />} />
+            <Route path="p/:slug" element={<TabRoute />} />
+            <Route path="title/:type/:id" element={<DetailRoute />} />
+            <Route path="*" element={<TabRoute />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
     </Provider>
   );
 }
