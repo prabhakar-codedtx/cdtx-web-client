@@ -1,11 +1,11 @@
 /**
- * Wire types for the delivery API (`/v1/*`), typed from the actual running
- * backend response shapes (`backend/app/schemas/storefront.py`,
- * `services/content.py::_serialize`) — not from the aspirational
- * `docs/delivery-api-contract-confirmed.md`, whose camelCase/embedded-items
- * shape is not what the server sends today. Field names here are snake_case
- * because that is what the backend actually emits; if the backend ever
- * migrates to the confirmed contract, this file moves with it.
+ * The delivery API's JSON in schema 3 (the server's default since 24 Oct 2026), as the client reads
+ * it. Every key is always sent (`null` / `[]` when there is nothing); every length is final, in
+ * `page.device.unit` (px on the web); fractions are of the drawn card. The client draws only from
+ * this: no design value, size or text lives in the client.
+ *
+ * Reference: `docs/client-contract/SCHEMA-3-KEYS.md`, `KEYS-EXPLAINED.md` and `RENDERING-GUIDE.md`
+ * in the CMS repo. An unknown key is ignored; an unknown enum value falls back to the safest one.
  */
 
 export interface Envelope<T> {
@@ -20,216 +20,497 @@ export interface Envelope<T> {
   data: T[];
 }
 
-export type Layout = 'banner' | 'carousel' | 'grid';
-export type ContainerSize = 'regular' | 'large' | 'xlarge';
-export type ContainerTag = 'regular' | 'vod' | 'playlist';
-export type ClickAction = 'detail' | 'player';
-export type ContentType =
-  'movie' | 'series' | 'season' | 'episode' | 'channel' | 'event' | 'trailer' | 'promotion' | 'card';
-
-export interface DeliveryItemSource {
-  source_type: 'manual' | 'query' | 'collection' | 'recommended' | 'time_based';
-  priority: number;
-  count: number;
-  content_url: string;
-  page_size: number | null;
-  total_pages: number | null;
-}
-
-/**
- * A container-wide decoration the server asks every card in the row to
- * carry — never per-item (contrast with `DeliveryItem.title_overlay`,
- * which one card can set and another can leave off). `display` is the
- * string `"true"`/`"false"`, not a boolean — that is what the backend
- * actually emits (`app/schemas/storefront.py`'s JSONB passthrough), and an
- * unconfigured container sends `{}` rather than omitting the field, so
- * `display` may also simply be absent.
- */
-export interface LogoOverlay {
-  display?: 'true' | 'false';
-  logoType?: 'play' | 'network' | 'brand';
-  position?: 'top' | 'bottom' | 'center';
-  transparency?: number;
-}
-
-export interface TagOverlay {
-  display?: 'true' | 'false';
-  position?: 'topright' | 'topleft' | 'bottomright' | 'bottomleft';
-  tagType?: 'premium' | 'free' | 'new';
-  transparency?: number;
-}
-
-/**
- * Client-side rail presenter selector. The backend only ever emits
- * `"rounded_rail"` today — its `RailDecorator` enum (`app/models/enums.py`)
- * has exactly one member, whitelisted out of the ~20 the reference
- * Quickplay SDK defines (see that enum's own docstring) — so this is a
- * closed set on the wire, not an open string.
- */
-export type RailDecorator = 'rounded_rail';
-
-export interface DeliveryContainer {
-  id: string;
-  name: string;
-  layout: Layout;
-  size: ContainerSize;
-  aspect_ratio: string;
-  click_action: ClickAction;
-  autoplay: boolean;
-  container_tag: ContainerTag;
-  rail_decorators: RailDecorator[];
-  background: Record<string, unknown>;
-  styling: Record<string, unknown>;
-  scroll_style: Record<string, unknown>;
-  logo_overlay: LogoOverlay;
-  tag_overlay: TagOverlay;
-  sources: DeliveryItemSource[];
-}
-
-export interface DeliveryTab {
-  id: string;
-  slug: string;
-  name: string;
-  containers: DeliveryContainer[];
-  total_pages: number;
-  current_page: number;
-}
-
-export interface DeliveryStorefront {
-  id: string;
-  slug: string;
-  name: string;
-  version: number;
-  tabs: DeliveryTab[];
-}
-
-export interface DeliveryImage {
-  url: string;
-  aspect_ratio: string | null;
-}
-
-/**
- * The 3x3 anchor grid the admin console's own position picker uses for an
- * overlaid title (and section headings, CTA buttons, etc. — one shared
- * vocabulary, see `frontend/src/lib/types/merchandising.ts`'s
- * `OverlayGridPosition`). Not the short `tr`/`br`/`tl` codes — those are a
- * separate, unrelated shorthand used only by `badges[].corner`.
- */
-export type OverlayGridPosition =
-  | 'top-left'
-  | 'top-center'
-  | 'top-right'
-  | 'center-left'
-  | 'center'
-  | 'center-right'
-  | 'bottom-left'
-  | 'bottom-center'
-  | 'bottom-right';
-
-/** Burns the title onto the card image at `position` instead of the plain
- * caption below it. Mirrors the admin's `titleOverlay` (same file as
- * OverlayGridPosition) — `insetXPx`/`insetYPx` are the current fields,
- * `paddingPx` a legacy fallback for a card authored before those existed. */
-export interface TitleOverlay {
-  position: OverlayGridPosition;
-  paddingPx?: number;
-  insetXPx?: number;
-  insetYPx?: number;
-}
-
-/** Icons a CTA button may carry — the same short whitelist as the admin's
- * `CtaIcon` (`frontend/src/lib/types/merchandising.ts`): every one of these
- * has to exist in a client's icon set before it can be sent on the wire. */
-export type CtaIcon = 'play' | 'plus' | 'bell' | 'heart' | 'download' | 'info';
-
-/** What tapping a CTA does. `link` keeps the destination for 'link'. */
-export type CtaAction = 'play' | 'detail' | 'link' | 'mylist' | 'reminder';
-
-/** A button overlaid on a card's art (typically a hero/banner card) —
- * mirrors the admin's `ContainerCta` exactly (same file as `CtaIcon`),
- * since `services/publishing.py::_merge_attached_buttons` writes this
- * straight from that shape into the published snapshot's `cta` list. */
-export interface CardCta {
-  label: string;
-  link: string;
-  style?: 'primary' | 'secondary';
-  icon?: CtaIcon | null;
-  iconSide?: 'left' | 'right';
-  fill?: 'solid' | 'outline' | 'plain';
-  color?: string;
-  textColor?: string;
-  radiusPx?: number;
-  size?: 'sm' | 'md' | 'lg';
-  action?: CtaAction;
-  position?: OverlayGridPosition;
-  offsetX?: number;
-  offsetY?: number;
-  insetXPx?: number;
-  insetYPx?: number;
-  iconOnly?: boolean;
-}
-
-/** A free-text card badge/ribbon — mirrors the admin's `CardBadge`. `corner`
- * is the short `tl`/`tr`/`bl`/`br` shorthand, not `OverlayGridPosition`. */
-export interface CardBadge {
-  text: string;
-  corner: 'tl' | 'tr' | 'bl' | 'br';
-  color?: 'accent' | 'dark' | 'light' | (string & {});
-  widthPct?: number;
-  insetXPx?: number;
-  insetYPx?: number;
-}
-
-/** One catalog title or authored card — the two shapes content.py serializes
- * to the same flat fields, so a rail renders both without knowing which. */
-export interface DeliveryItem {
-  id: string;
-  content_type: ContentType;
-  slug: string | null;
-  name: string;
-  /** Only ever present on a real catalog title (`content.py::_serialize`) —
-   * absent on an authored card, which has no per-row language column. */
-  language?: string;
-  release_year: number | null;
-  duration_seconds: number | null;
-  genres: string[];
-  images: DeliveryImage[];
-  entitlements: unknown;
-  available_until: string | null;
-  // Card-only fields — absent (undefined) on a real catalog title.
-  cta?: CardCta[];
-  badges?: CardBadge[];
-  presentation_kind?: string | null;
-  /** Absent/null means "no overlay" — the admin's own documented default is
-   * a plain caption below the card, not an overlay at a fallback position. */
-  title_overlay?: TitleOverlay | null;
-  description_overlay?: Record<string, unknown> | null;
-  rank?: number | null;
-  progress?: number | null;
-  duration_label?: string | null;
-  metadata?: string | null;
-  foreground?: Record<string, unknown> | null;
-  /** A card's own per-item override of the container's `click_action` (e.g.
-   * "play this one immediately" on an otherwise detail-page row) —
-   * `_card_to_delivery_item` defaults it to `"detail"` server-side, so it is
-   * always present on a card but never on a real catalog title. */
-  click_action?: ClickAction;
-  /** A plain caption line, independent of `metadata`/`description_overlay`
-   * — `null` (not just absent) when the editor left it blank, since the
-   * backend always sends the key once a card reaches this whitelist. */
-  description?: string | null;
-  /** Opaque, console-authored font styling for this card's own caption
-   * text — `fontSize`/`fontWeight` are the two keys the admin's editor
-   * itself scaffolds today (`frontend/src/lib/types/merchandising.ts`), but
-   * this is a JSONB passthrough with no fixed schema on the wire (same
-   * treatment as `badges`/`title_overlay`), so anything else authored
-   * there arrives here too. `{}` — never absent — when unset. */
-  text_style?: { fontSize?: string; fontWeight?: string } & Record<string, unknown>;
-}
-
-/** Region/locale/device the delivery API scopes every request by. */
+/** The request context every call carries. */
 export interface DeliveryContext {
   reg: string;
   locale: string;
   dt: string;
+}
+
+// ---- launch config (not inside the envelope) -------------------------------------------------
+
+export interface LaunchSetting {
+  key: string;
+  type: 'String' | 'Number' | 'Boolean' | 'Json';
+  value: unknown;
+}
+
+export interface LaunchConfig {
+  config: LaunchSetting[];
+  geo: { country: string; group: string; ip: string };
+  trackingId: string;
+}
+
+// ---- Design System (`GET {designSystemURL}`) -------------------------------------------------
+
+export interface ThemeFont {
+  key: string;
+  name: string;
+  family: string;
+  source: string;
+  stack: string;
+  cssUrl: string | null;
+}
+
+export interface Theme {
+  version: string;
+  product: string;
+  device: { dt: string; deviceClass: string; unit: string; unitScale: number };
+  fonts: ThemeFont[];
+  /** The font of any text whose `fontFamily` is null. */
+  defaultFontFamily: string | null;
+}
+
+// ---- navigation ------------------------------------------------------------------------------
+
+export interface NavPage {
+  slug: string;
+  title: string | null;
+  icon: string | null;
+  position: number | null;
+  isDefault: boolean;
+  version: number | null;
+  versionLabel: string | null;
+  publishedAt: string | null;
+  /** The page call, complete (relative to the API host). */
+  url: string | null;
+}
+
+// ---- titles (`GET rail.source.contentUrl`) ---------------------------------------------------
+
+export interface TitleImage {
+  /** `0-2x3`, `0-16x9`…; null = the main picture. */
+  aspect: string | null;
+  url: string | null;
+  fallback: boolean;
+}
+
+export type BadgeKey =
+  | 'top10'
+  | 'new'
+  | 'recentlyAdded'
+  | 'newEpisode'
+  | 'leavingSoon'
+  | 'uhd4k'
+  | 'hdr'
+  | 'dolbyVision'
+  | 'dolbyAtmos'
+  | 'free'
+  | 'premium'
+  | 'live'
+  | 'exclusive'
+  | 'original';
+
+/** One title of a rail. An atom's `bind` and a meta row's `fields` name these keys. */
+export interface Title {
+  id: string;
+  slug: string | null;
+  type: string | null;
+  title: string | null;
+  description: string | null;
+  releaseYear: number | null;
+  durationSeconds: number | null;
+  rating: string | null;
+  genres: string[];
+  languages: string[];
+  videoQuality: string[];
+  audioQuality: string[];
+  episodeLabel: string | null;
+  badges: Record<BadgeKey, boolean>;
+  images: TitleImage[];
+  logoUrl: string | null;
+  previewVideoUrl: string | null;
+  availableUntil: string | null;
+  entitlements: unknown;
+  [key: string]: unknown;
+}
+
+// ---- shared shapes ---------------------------------------------------------------------------
+
+export interface Point {
+  x: number | null;
+  y: number | null;
+}
+
+export interface Sides {
+  top: number | null;
+  right: number | null;
+  bottom: number | null;
+  left: number | null;
+}
+
+export interface GradientStop {
+  color: string | null;
+  opacity: number | null;
+  at: number | null;
+}
+
+/** CSS degrees: 0 bottom to top, 90 left to right, 180 top to bottom. */
+export interface Gradient {
+  angle: number | null;
+  stops: GradientStop[];
+}
+
+/** A picture: `fixed` draws `url`; `content` the title's picture (`field`, else by `card.imageAspect`). */
+export interface Image {
+  source: 'fixed' | 'content' | string | null;
+  url: string | null;
+  field: string | null;
+  fit: 'cover' | 'contain' | 'fill' | 'width' | 'height' | string | null;
+  alignX: 'left' | 'center' | 'right' | string | null;
+  alignY: 'top' | 'center' | 'bottom' | string | null;
+}
+
+/** What is painted behind something. `type` says which key is in use. */
+export interface Fill {
+  type: 'color' | 'gradient' | 'image' | string | null;
+  color: string | null;
+  gradient: Gradient | null;
+  image: Image | null;
+  /** 0-1 of black over an image. */
+  scrim: number | null;
+  /** Shown while an image loads, or when it cannot. */
+  fallbackColor: string | null;
+}
+
+/** `sides` [] = all four. */
+export interface Stroke {
+  width: number | null;
+  color: string | null;
+  sides: string[];
+}
+
+export interface Shadow {
+  type: 'drop' | 'inner' | string | null;
+  x: number | null;
+  y: number | null;
+  blur: number | null;
+  spread: number | null;
+  color: string | null;
+}
+
+/** `lineHeight` is a multiple of `fontSize`; `fontFamily` null = the Design System's default. */
+export interface TextStyle {
+  fontFamily: string | null;
+  fontSize: number | null;
+  fontWeight: number | null;
+  lineHeight: number | null;
+  letterSpacing: number | null;
+  color: string | null;
+  align: 'left' | 'center' | 'right' | string | null;
+  textCase: 'none' | 'uppercase' | 'lowercase' | 'capitalize' | string | null;
+  maxLines: number | null;
+  shadows: Shadow[];
+}
+
+// ---- a block: one card design ----------------------------------------------------------------
+
+/** Fractions (0-1) of the drawn card: the `pivot` point of the box sits on (`cx`, `cy`). */
+export interface Frame {
+  cx: number | null;
+  cy: number | null;
+  pivot: Point;
+  sizing: 'fixed' | 'min' | 'hug' | 'fill' | string | null;
+  w: number | null;
+  h: number | null;
+  /** Hug only: the widest it may be, as a share of the card's width. */
+  maxW: number | null;
+  pinned: string[];
+}
+
+export interface IconFiles {
+  /** `as-is`: the file is already painted; `tint`: paint it the layer's `color`. */
+  draw: 'as-is' | 'tint' | string | null;
+  svg: string | null;
+  vectorDrawable: string | null;
+  png: { density: string; url: string }[];
+}
+
+export interface Slider {
+  /** 0-1 (a value above 1 is a percent: known data issue). */
+  value: number | null;
+  trackColor: string | null;
+  progressColor: string | null;
+  height: number | null;
+  minWidth: number | null;
+  cornerRadius: number | null;
+}
+
+/** One layer of a box atom, in drawing order. */
+export interface Layer {
+  type: 'icon' | 'text' | 'slider' | string | null;
+  side: 'left' | 'right' | string | null;
+  bind: string | null;
+  staticText: string | null;
+  color: string | null;
+  size: number | null;
+  emoji: string | null;
+  icon: IconFiles | null;
+  text: TextStyle | null;
+  slider: Slider | null;
+  focusColor: string | null;
+  focusIcon: IconFiles | null;
+}
+
+export interface LayoutStyle {
+  direction: 'row' | 'column' | string | null;
+  justify: string | null;
+  align: 'top' | 'middle' | 'bottom' | string | null;
+  gap: number | null;
+  padding: Sides;
+  width: number | null;
+  height: number | null;
+  minWidth: number | null;
+  minHeight: number | null;
+}
+
+export interface BoxStyle {
+  background: Fill | null;
+  border: Stroke | null;
+  cornerRadius: number | null;
+  opacity: number;
+}
+
+export interface MetaStyle {
+  fields: string[];
+  separator: string | null;
+  listSeparator: string | null;
+  gap: number | null;
+  fieldColors: Record<string, string>;
+  fieldModes: Record<string, 'list' | 'count' | 'first' | string>;
+  fieldDisplays: Record<string, 'text' | 'badge' | string>;
+}
+
+export interface ImageStyle extends Image {
+  aspectRatio: number | null;
+  fillWidth: boolean;
+  /** Of the card's width, on the `roundedCorners` listed. */
+  cornerRadiusFrac: number | null;
+  roundedCorners: string[];
+  opacity: number;
+  border: Stroke | null;
+}
+
+export interface Style {
+  layout: LayoutStyle;
+  box: BoxStyle;
+  text: TextStyle | null;
+  meta: MetaStyle | null;
+  image: ImageStyle | null;
+  layers: Layer[];
+}
+
+/** TV: the look of an atom (a button) when the remote's focus is on it. */
+export interface AtomFocus {
+  scale: number | null;
+  background: Fill | null;
+  /** Its icons and text. */
+  color: string | null;
+  border: Stroke | null;
+}
+
+export interface Atom {
+  id: string;
+  type: 'box' | 'text' | 'meta' | 'image' | string;
+  atomId: string | null;
+  builtIn: string | null;
+  slot: 'overlay' | 'image' | 'below' | 'flow' | string | null;
+  zIndex: number | null;
+  /** Null inside a component: its auto layout places it. */
+  frame: Frame | null;
+  /** Already applied to every length in `style`. */
+  scale: number | null;
+  action: string | null;
+  bind: string | null;
+  staticText: string | null;
+  /** A badge key: drawn only when the title's `badges[key]` is true. */
+  showWhen: BadgeKey | string | null;
+  style: Style;
+  relative: { fontSize: number | null; cornerRadius: number | null } | null;
+  focus: AtomFocus | null;
+  role: string | null;
+  showLogoWhenAvailable: boolean;
+  titleSlot: number | null;
+}
+
+export interface LayoutItem {
+  type: 'element' | 'group' | string | null;
+  id: string | null;
+  direction: 'horizontal' | 'vertical' | string | null;
+  gap: number | null;
+  items: LayoutItem[];
+}
+
+export interface AutoLayout {
+  direction: 'horizontal' | 'vertical' | string | null;
+  mainAxis: string | null;
+  crossAxis: string | null;
+  gap: number | null;
+  rowGap: number | null;
+  wrap: boolean;
+  padding: Sides;
+  width: { mode: 'hug' | 'fill' | 'fixed' | string | null; value: number | null };
+  height: { mode: 'hug' | 'fill' | 'fixed' | string | null; value: number | null };
+  items: LayoutItem[];
+}
+
+export interface Rule {
+  id: string | null;
+  item: string | null;
+  attr: string | null;
+  relation: string | null;
+  target: string | null;
+  targetAttr: string | null;
+  multiplier: number | null;
+  constant: number | null;
+}
+
+/** A group of atoms laid out as a row or column (`badge-group`: a corner's badge stack). */
+export interface Component {
+  id: string;
+  type: string | null;
+  sourceComponentId: string | null;
+  slot: 'card' | 'beside' | 'below' | string | null;
+  corner: string | null;
+  zIndex: number | null;
+  frame: Frame | null;
+  atoms: Atom[];
+  autoLayout: AutoLayout;
+  layoutRules: Rule[];
+}
+
+export interface Card {
+  /** The designed size: what `contentFit` and a `designed` rail draw at. */
+  width: number | null;
+  height: number | null;
+  shape: 'rectangle' | 'ribbon' | string | null;
+  /** The outline as fractions of the card; [] = a rectangle. */
+  shapePolygon: Point[];
+  display: 'card' | 'hero' | string | null;
+  /** A hero: `width: screen`, `height: screen | ratio`. */
+  stretch: { width: string | null; height: string | null } | null;
+  /** Which of a title's `images[]` the card shows. */
+  imageAspect: string | null;
+  background: Fill | null;
+  insetImage:
+    | (Image & {
+        left: number | null;
+        top: number | null;
+        width: number | null;
+        height: number | null;
+        shapePolygon: Point[];
+      })
+    | null;
+  /** Drawn over the picture, in order. */
+  shade: Gradient[];
+  border: Stroke | null;
+  cornerRadiusFrac: {
+    topLeft: number | null;
+    topRight: number | null;
+    bottomRight: number | null;
+    bottomLeft: number | null;
+  };
+  shadows: Shadow[];
+  focus: {
+    scale: number | null;
+    border: Stroke | null;
+    glow: { blur: number | null; color: string | null; opacity: number | null } | null;
+    durationMs: number | null;
+  } | null;
+  contentFit: { minScale: number | null; maxScale: number | null };
+  stack: { layer: string; zIndex: number }[];
+}
+
+/** One card design, sent once per page and named by the rails (`blockKey`). */
+export interface Block {
+  id: string | null;
+  card: Card;
+  atoms: Atom[];
+  components: Component[];
+  layoutRules: Rule[];
+  /** Top 10 only: the rank numeral. */
+  rank: {
+    style: string | null;
+    color: string | null;
+    gradient: Gradient | null;
+    layer: string | null;
+  } | null;
+}
+
+// ---- rails and page --------------------------------------------------------------------------
+
+export interface TapAction {
+  type: 'detail' | 'player' | 'collection' | 'link' | 'none' | string | null;
+  target: string | null;
+}
+
+export interface RailLayout {
+  mode: 'count' | 'designed' | 'exact' | 'tier' | string | null;
+  itemsPerView: number | null;
+  /** Set only when the rail resizes the card; null = the block's own size. */
+  cardWidth: number | null;
+  cardHeight: number | null;
+  /** Width / height: `count` and `banner` work the height out from it. */
+  cardAspectRatio: number | null;
+  gap: number | null;
+  rowGap: number | null;
+  start: number | null;
+  end: number | null;
+  /** TV: free room to keep around the cards for the focus look. */
+  focusInset: Point | null;
+  direction: 'horizontal' | 'vertical' | string | null;
+  bodyPadding: Sides | null;
+}
+
+export interface Rail {
+  /** This placement on the page. */
+  key: string;
+  railId: string | null;
+  title: string | null;
+  layout: 'hero' | 'carousel' | 'banner' | 'grid' | string | null;
+  autoplay: boolean;
+  background: Fill | null;
+  titleStyle: TextStyle & { textStyle: string | null; hidden: boolean };
+  heroLayout: {
+    thumbnailStyle: string | null;
+    paging: boolean;
+    autoAdvanceSec: number | null;
+    thumbnailsShown: number | null;
+    thumbnailRatio: string | null;
+    thumbnailWidth: number | null;
+  } | null;
+  tap: { card: TapAction; cards: Record<string, TapAction>; elements: Record<string, string> };
+  railLayout: RailLayout;
+  seeAll: { show: boolean; label: string | null };
+  grid: { maxRows: number | null } | null;
+  blockKey: string | null;
+  headerKey: string | null;
+  footerKey: string | null;
+  source: {
+    type: string | null;
+    /** 0: nothing to show; hide the rail without calling. */
+    count: number | null;
+    contentUrl: string | null;
+    pageSize: number | null;
+  };
+}
+
+export interface Page {
+  schemaVersion: number;
+  id: string | null;
+  product: string | null;
+  slug: string | null;
+  title: string | null;
+  version: number | null;
+  versionLabel: string | null;
+  publishedAt: string | null;
+  device: { dt: string | null; deviceClass: string | null; unit: string | null; unitScale: number | null };
+  /** Always set; behind everything. */
+  background: Fill;
+  spacing: { railGap: number | null; railPadding: Sides };
+  blocks: Record<string, Block>;
+  /** In screen order: the hero first (`layout: hero`), then the rows. */
+  rails: Rail[];
+  /** Counts rows only (not the hero). More: call again with `start=nextStart`. */
+  paging: { start: number | null; rows: number | null; total: number | null; nextStart: number | null };
 }

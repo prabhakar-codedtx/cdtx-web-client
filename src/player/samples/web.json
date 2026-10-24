@@ -1,0 +1,686 @@
+{
+  "schemaVersion": 3,
+  "profile": "default-player",
+  "version": 1,
+  "deviceClass": "web",
+  "view": {
+    "id": "web",
+    "extends": [],
+    "design": "web"
+  },
+  "device": {
+    "dt": "web",
+    "unit": "px",
+    "unitScale": 1
+  },
+  "surface": {
+    "aspect": "16:9",
+    "design": {
+      "w": 1024,
+      "h": 576
+    },
+    "safe": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "controls": [
+    {
+      "id": "back",
+      "frame": {
+        "cx": 0.0234,
+        "cy": 0.0417,
+        "pivot": {
+          "x": 0,
+          "y": 0
+        },
+        "sizing": "min",
+        "w": 0.0508,
+        "h": 0.0903,
+        "x": 0.0234,
+        "y": 0.0417,
+        "pinned": ["left", "top"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "trailing",
+          "relation": "lte",
+          "to": "title",
+          "toAttr": "leading",
+          "constant": -306
+        },
+        {
+          "attr": "bottom",
+          "relation": "lte",
+          "to": "elapsed",
+          "toAttr": "top",
+          "constant": -365
+        }
+      ]
+    },
+    {
+      "id": "title",
+      "frame": {
+        "cx": 0.5,
+        "cy": 0.0417,
+        "pivot": {
+          "x": 0.5,
+          "y": 0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.0417,
+        "pinned": ["centerX", "top"]
+      },
+      "config": {
+        "showSubtitle": true
+      },
+      "ties": [
+        {
+          "attr": "bottom",
+          "relation": "lte",
+          "to": "playPause",
+          "toAttr": "top",
+          "constant": -172
+        }
+      ]
+    },
+    {
+      "id": "rewind",
+      "frame": {
+        "cx": 0.4238,
+        "cy": 0.5,
+        "pivot": {
+          "x": 1,
+          "y": 0.5
+        },
+        "sizing": "min",
+        "w": 0.0508,
+        "h": 0.0903,
+        "x": 0.373,
+        "y": 0.4549,
+        "pinned": ["right", "centerY"]
+      },
+      "config": {
+        "seconds": 10,
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "trailing",
+          "relation": "eq",
+          "to": "playPause",
+          "toAttr": "leading",
+          "constant": -39
+        },
+        {
+          "attr": "top",
+          "relation": "gte",
+          "to": "title",
+          "toAttr": "bottom",
+          "constant": 185
+        },
+        {
+          "attr": "bottom",
+          "relation": "lte",
+          "to": "seekBar",
+          "toAttr": "top",
+          "constant": -127
+        }
+      ]
+    },
+    {
+      "id": "playPause",
+      "frame": {
+        "cx": 0.5,
+        "cy": 0.5,
+        "pivot": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "sizing": "fixed",
+        "w": 0.0762,
+        "h": 0.1354,
+        "x": 0.4619,
+        "y": 0.4323,
+        "pinned": ["centerX", "centerY"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "bottom",
+          "relation": "lte",
+          "to": "seekBar",
+          "toAttr": "top",
+          "constant": -114
+        }
+      ]
+    },
+    {
+      "id": "forward",
+      "frame": {
+        "cx": 0.5762,
+        "cy": 0.5,
+        "pivot": {
+          "x": 0,
+          "y": 0.5
+        },
+        "sizing": "min",
+        "w": 0.0508,
+        "h": 0.0903,
+        "x": 0.5762,
+        "y": 0.4549,
+        "pinned": ["left", "centerY"]
+      },
+      "config": {
+        "seconds": 10,
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "leading",
+          "relation": "eq",
+          "to": "playPause",
+          "toAttr": "trailing",
+          "constant": 39
+        },
+        {
+          "attr": "top",
+          "relation": "gte",
+          "to": "title",
+          "toAttr": "bottom",
+          "constant": 185
+        },
+        {
+          "attr": "bottom",
+          "relation": "lte",
+          "to": "seekBar",
+          "toAttr": "top",
+          "constant": -127
+        }
+      ]
+    },
+    {
+      "id": "skipIntro",
+      "frame": {
+        "cx": 0.782,
+        "cy": 0.7569,
+        "pivot": {
+          "x": 1,
+          "y": 1
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.6666,
+        "pinned": ["right", "bottom"]
+      },
+      "config": {
+        "label": "Skip Intro",
+        "displaySeconds": 8,
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "trailing",
+          "relation": "eq",
+          "to": "nextEpisode",
+          "toAttr": "leading",
+          "constant": -12
+        },
+        {
+          "attr": "bottom",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "top",
+          "constant": -6
+        }
+      ],
+      "showWhen": "introMarkers"
+    },
+    {
+      "id": "nextEpisode",
+      "frame": {
+        "cx": 0.9766,
+        "cy": 0.7569,
+        "pivot": {
+          "x": 1,
+          "y": 1
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.6666,
+        "pinned": ["right", "bottom"]
+      },
+      "config": {
+        "showBeforeEnd": 30,
+        "countdown": true,
+        "autoplay": true,
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "bottom",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "top",
+          "constant": -6
+        }
+      ],
+      "showWhen": "hasNext"
+    },
+    {
+      "id": "elapsed",
+      "frame": {
+        "cx": 0.0234,
+        "cy": 0.8576,
+        "pivot": {
+          "x": 0,
+          "y": 1
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.7673,
+        "pinned": ["left", "bottom"]
+      }
+    },
+    {
+      "id": "seekBar",
+      "frame": {
+        "cx": 0.1113,
+        "cy": 0.8576,
+        "pivot": {
+          "x": 0,
+          "y": 1
+        },
+        "sizing": "fill",
+        "w": 0.7723,
+        "h": 0.0903,
+        "x": 0.1113,
+        "y": 0.7673,
+        "pinned": ["left", "right", "bottom"]
+      },
+      "config": {
+        "showMarkers": true
+      },
+      "ties": [
+        {
+          "attr": "leading",
+          "relation": "eq",
+          "to": "elapsed",
+          "toAttr": "trailing",
+          "constant": 12
+        },
+        {
+          "attr": "trailing",
+          "relation": "eq",
+          "to": "remaining",
+          "toAttr": "leading",
+          "constant": -12
+        }
+      ]
+    },
+    {
+      "id": "remaining",
+      "frame": {
+        "cx": 0.9766,
+        "cy": 0.8576,
+        "pivot": {
+          "x": 1,
+          "y": 1
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.7673,
+        "pinned": ["right", "bottom"]
+      }
+    },
+    {
+      "id": "episodes",
+      "frame": {
+        "cx": 0.3402,
+        "cy": 0.8681,
+        "pivot": {
+          "x": 1,
+          "y": 0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.8681,
+        "pinned": ["right", "top"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50,
+        "row": "",
+        "listDirection": "horizontal",
+        "showProgress": true,
+        "thumbnails": true
+      },
+      "ties": [
+        {
+          "attr": "trailing",
+          "relation": "eq",
+          "to": "quality",
+          "toAttr": "leading",
+          "constant": -12
+        },
+        {
+          "attr": "top",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "bottom",
+          "constant": 6
+        }
+      ],
+      "panel": {
+        "opens": "sheet",
+        "placement": {
+          "mode": "anchored"
+        },
+        "closeOnSelect": true,
+        "list": {
+          "scope": "currentSeason",
+          "itemWidth": 176,
+          "fullWidth": true,
+          "direction": "horizontal"
+        }
+      },
+      "showWhen": "hasEpisodes"
+    },
+    {
+      "id": "quality",
+      "frame": {
+        "cx": 0.4941,
+        "cy": 0.8681,
+        "pivot": {
+          "x": 1,
+          "y": 0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.8681,
+        "pinned": ["right", "top"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50,
+        "showCurrent": false,
+        "showAuto": true,
+        "button": "icon"
+      },
+      "ties": [
+        {
+          "attr": "top",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "bottom",
+          "constant": 6
+        }
+      ],
+      "panel": {
+        "opens": "popover",
+        "placement": {
+          "mode": "anchored"
+        },
+        "closeOnSelect": true
+      }
+    },
+    {
+      "id": "audio",
+      "frame": {
+        "cx": 0.5059,
+        "cy": 0.8681,
+        "pivot": {
+          "x": 0,
+          "y": 0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.8681,
+        "pinned": ["left", "top"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50,
+        "showCurrent": false
+      },
+      "ties": [
+        {
+          "attr": "leading",
+          "relation": "eq",
+          "to": "quality",
+          "toAttr": "trailing",
+          "constant": 12
+        },
+        {
+          "attr": "top",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "bottom",
+          "constant": 6
+        }
+      ],
+      "panel": {
+        "opens": "popover",
+        "placement": {
+          "mode": "anchored"
+        },
+        "closeOnSelect": true
+      },
+      "showWhen": "hasAudioTracks"
+    },
+    {
+      "id": "subtitles",
+      "frame": {
+        "cx": 0.6801,
+        "cy": 0.8681,
+        "pivot": {
+          "x": 0,
+          "y": 0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.8681,
+        "pinned": ["left", "top"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50,
+        "showCurrent": false,
+        "showOff": true
+      },
+      "ties": [
+        {
+          "attr": "leading",
+          "relation": "eq",
+          "to": "audio",
+          "toAttr": "trailing",
+          "constant": 12
+        },
+        {
+          "attr": "top",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "bottom",
+          "constant": 6
+        }
+      ],
+      "panel": {
+        "opens": "popover",
+        "placement": {
+          "mode": "anchored"
+        },
+        "closeOnSelect": true
+      },
+      "showWhen": "hasSubtitles"
+    }
+  ],
+  "ad": {
+    "controls": [
+      {
+        "id": "adLabel",
+        "frame": {
+          "cx": 0.0234,
+          "cy": 0.0417,
+          "pivot": {
+            "x": 0,
+            "y": 0
+          },
+          "sizing": "hug",
+          "w": null,
+          "h": 0.0903,
+          "x": null,
+          "y": 0.0417,
+          "pinned": ["left", "top"]
+        },
+        "config": {
+          "text": "Ad",
+          "style": "badge"
+        }
+      },
+      {
+        "id": "adCountdown",
+        "frame": {
+          "cx": 0.9766,
+          "cy": 0.0417,
+          "pivot": {
+            "x": 1,
+            "y": 0
+          },
+          "sizing": "hug",
+          "w": null,
+          "h": 0.0903,
+          "x": null,
+          "y": 0.0417,
+          "pinned": ["right", "top"]
+        },
+        "config": {
+          "format": "mm:ss"
+        }
+      },
+      {
+        "id": "playPause",
+        "frame": {
+          "cx": 0.5,
+          "cy": 0.5,
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "sizing": "fixed",
+          "w": 0.0762,
+          "h": 0.1354,
+          "x": 0.4619,
+          "y": 0.4323,
+          "pinned": ["centerX", "centerY"]
+        },
+        "config": {
+          "panel": "",
+          "opens": "auto",
+          "closeOnSelect": true,
+          "panelCustom": false,
+          "panelX": 50,
+          "panelY": 50
+        },
+        "ties": [
+          {
+            "attr": "bottom",
+            "relation": "lte",
+            "to": "seekBar",
+            "toAttr": "top",
+            "constant": -114
+          }
+        ]
+      }
+    ]
+  },
+  "behaviour": {
+    "input": "pointer",
+    "autoHideSeconds": 3,
+    "initialFocus": "playPause",
+    "focusOrder": [
+      "back",
+      "rewind",
+      "playPause",
+      "forward",
+      "skipIntro",
+      "nextEpisode",
+      "seekBar",
+      "episodes",
+      "quality",
+      "audio",
+      "subtitles"
+    ],
+    "seekStepSeconds": 10,
+    "minTarget": 16
+  }
+}

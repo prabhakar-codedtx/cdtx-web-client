@@ -1,12 +1,10 @@
 import { configureStore } from '@reduxjs/toolkit';
-import homeReducer from '@/features/home/homeSlice';
-import railsReducer from '@/features/home/railsSlice';
+import launchReducer from '@/app/launchSlice';
+import pagesReducer from '@/app/pagesSlice';
+import uiReducer from '@/app/uiSlice';
 
 export const store = configureStore({
-  reducer: {
-    home: homeReducer,
-    rails: railsReducer,
-  },
+  reducer: { launch: launchReducer, pages: pagesReducer, ui: uiReducer },
 });
 
 export type RootState = ReturnType<typeof store.getState>;

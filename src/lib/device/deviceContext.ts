@@ -1,28 +1,24 @@
+import { LOCALE, REGION } from '@/lib/config';
 import type { DeliveryContext } from '@/lib/api/types';
 
-/**
- * Heuristic Android TV detection. There is no single official UA marker
- * across vendors, but "Android" + a TV-shaped Chrome build reliably includes
- * one of these tokens (Google/AOSP TV, Fire TV, or Chromecast-with-Google-TV
- * WebView). False negatives just fall back to "web", which is safe — the
- * storefront still renders, only the remote-friendly chrome is skipped.
- */
+/** Below this width the browser is a phone: it asks for the mobile designs. */
+export const MOBILE_MAX_PX = 767;
+
 function isAndroidTv(userAgent: string): boolean {
   return /Android/.test(userAgent) && /(AFT[A-Z]|GoogleTV|Android TV)/.test(userAgent);
 }
 
 /**
- * The delivery API's request context. `dt` is deliberately only ever "web"
- * or "androidtv" — the seeded storefront's `device_types` only recognizes
- * those two (confirmed against the running backend: `dt=tablet`/`mobile`/
- * `tv` all 404 at storefront resolution). Tablet/mobile/desktop layout
- * differences are handled entirely client-side via `useBreakpoint`, not by
- * asking the server for a bucket it doesn't have.
+ * Which device the client says it is (`dt`), so the server sends the card designs and sizes made for
+ * it. `VITE_DT` fixes it; otherwise a TV browser asks as a TV, a narrow window as mobile web, and
+ * anything else as web.
  */
-export function getDeliveryContext(): DeliveryContext {
-  return {
-    reg: import.meta.env.VITE_DEFAULT_REGION || 'ph',
-    locale: import.meta.env.VITE_DEFAULT_LOCALE || 'en',
-    dt: isAndroidTv(navigator.userAgent) ? 'androidtv' : 'web',
-  };
+export function getDt(width: number = window.innerWidth): string {
+  if (import.meta.env.VITE_DT) return import.meta.env.VITE_DT;
+  if (isAndroidTv(navigator.userAgent)) return 'androidtv';
+  return width <= MOBILE_MAX_PX ? 'mobileweb' : 'web';
+}
+
+export function getDeliveryContext(width?: number): DeliveryContext {
+  return { reg: REGION, locale: LOCALE, dt: getDt(width) };
 }

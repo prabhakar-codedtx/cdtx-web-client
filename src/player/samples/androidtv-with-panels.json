@@ -1,0 +1,1612 @@
+{
+  "schemaVersion": 3,
+  "profile": "default-player",
+  "version": 1,
+  "deviceClass": "tv",
+  "view": {
+    "id": "tv",
+    "extends": [],
+    "design": "tv"
+  },
+  "device": {
+    "dt": "androidtv",
+    "unit": "dp",
+    "unitScale": 0.9375
+  },
+  "surface": {
+    "aspect": "16:9",
+    "design": {
+      "w": 960.0,
+      "h": 540.0
+    },
+    "safe": {
+      "x": 0.0,
+      "y": 0.0
+    }
+  },
+  "controls": [
+    {
+      "id": "back",
+      "frame": {
+        "cx": 0.0234,
+        "cy": 0.0417,
+        "pivot": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "sizing": "min",
+        "w": 0.0508,
+        "h": 0.0903,
+        "x": 0.0234,
+        "y": 0.0417,
+        "pinned": ["left", "top"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      }
+    },
+    {
+      "id": "title",
+      "frame": {
+        "cx": 0.5,
+        "cy": 0.0417,
+        "pivot": {
+          "x": 0.5,
+          "y": 0.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.0417,
+        "pinned": ["centerX", "top"]
+      },
+      "config": {
+        "showSubtitle": true
+      }
+    },
+    {
+      "id": "rewind",
+      "frame": {
+        "cx": 0.4238,
+        "cy": 0.5,
+        "pivot": {
+          "x": 1.0,
+          "y": 0.5
+        },
+        "sizing": "min",
+        "w": 0.0508,
+        "h": 0.0903,
+        "x": 0.373,
+        "y": 0.4549,
+        "pinned": ["right", "centerY"]
+      },
+      "config": {
+        "seconds": 10,
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "trailing",
+          "relation": "eq",
+          "to": "playPause",
+          "toAttr": "leading",
+          "constant": -36.56
+        }
+      ]
+    },
+    {
+      "id": "playPause",
+      "frame": {
+        "cx": 0.5,
+        "cy": 0.5,
+        "pivot": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "sizing": "fixed",
+        "w": 0.0762,
+        "h": 0.1354,
+        "x": 0.4619,
+        "y": 0.4323,
+        "pinned": ["centerX", "centerY"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      }
+    },
+    {
+      "id": "forward",
+      "frame": {
+        "cx": 0.5762,
+        "cy": 0.5,
+        "pivot": {
+          "x": 0.0,
+          "y": 0.5
+        },
+        "sizing": "min",
+        "w": 0.0508,
+        "h": 0.0903,
+        "x": 0.5762,
+        "y": 0.4549,
+        "pinned": ["left", "centerY"]
+      },
+      "config": {
+        "seconds": 10,
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "leading",
+          "relation": "eq",
+          "to": "playPause",
+          "toAttr": "trailing",
+          "constant": 36.56
+        }
+      ]
+    },
+    {
+      "id": "skipIntro",
+      "frame": {
+        "cx": 0.782,
+        "cy": 0.7569,
+        "pivot": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.6666,
+        "pinned": ["right", "bottom"]
+      },
+      "config": {
+        "label": "Skip Intro",
+        "displaySeconds": 8,
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "trailing",
+          "relation": "eq",
+          "to": "nextEpisode",
+          "toAttr": "leading",
+          "constant": -11.25
+        },
+        {
+          "attr": "bottom",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "top",
+          "constant": -5.62
+        }
+      ],
+      "showWhen": "introMarkers"
+    },
+    {
+      "id": "nextEpisode",
+      "frame": {
+        "cx": 0.9766,
+        "cy": 0.7569,
+        "pivot": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.6666,
+        "pinned": ["right", "bottom"]
+      },
+      "config": {
+        "showBeforeEnd": 30,
+        "countdown": true,
+        "autoplay": true,
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50
+      },
+      "ties": [
+        {
+          "attr": "bottom",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "top",
+          "constant": -5.62
+        }
+      ],
+      "showWhen": "hasNext"
+    },
+    {
+      "id": "elapsed",
+      "frame": {
+        "cx": 0.0234,
+        "cy": 0.8576,
+        "pivot": {
+          "x": 0.0,
+          "y": 1.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.7673,
+        "pinned": ["left", "bottom"]
+      }
+    },
+    {
+      "id": "seekBar",
+      "frame": {
+        "cx": 0.1113,
+        "cy": 0.8576,
+        "pivot": {
+          "x": 0.0,
+          "y": 1.0
+        },
+        "sizing": "fill",
+        "w": 0.7723,
+        "h": 0.0903,
+        "x": 0.1113,
+        "y": 0.7673,
+        "pinned": ["left", "right", "bottom"]
+      },
+      "config": {
+        "showMarkers": true
+      },
+      "ties": [
+        {
+          "attr": "leading",
+          "relation": "eq",
+          "to": "elapsed",
+          "toAttr": "trailing",
+          "constant": 11.25
+        },
+        {
+          "attr": "trailing",
+          "relation": "eq",
+          "to": "remaining",
+          "toAttr": "leading",
+          "constant": -11.25
+        }
+      ]
+    },
+    {
+      "id": "remaining",
+      "frame": {
+        "cx": 0.9766,
+        "cy": 0.8576,
+        "pivot": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.7673,
+        "pinned": ["right", "bottom"]
+      }
+    },
+    {
+      "id": "episodes",
+      "frame": {
+        "cx": 0.3402,
+        "cy": 0.8681,
+        "pivot": {
+          "x": 1.0,
+          "y": 0.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.8681,
+        "pinned": ["right", "top"]
+      },
+      "config": {
+        "panel": "9c0614de-fa5d-4eba-b690-d5b787b32722",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50,
+        "row": "cda801be-7dd1-46f6-97d1-42c95b396ff2",
+        "listDirection": "horizontal",
+        "showProgress": true,
+        "thumbnails": true
+      },
+      "ties": [
+        {
+          "attr": "trailing",
+          "relation": "eq",
+          "to": "quality",
+          "toAttr": "leading",
+          "constant": -11.25
+        },
+        {
+          "attr": "top",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "bottom",
+          "constant": 5.63
+        }
+      ],
+      "panel": {
+        "component": "9c0614de-fa5d-4eba-b690-d5b787b32722",
+        "row": "cda801be-7dd1-46f6-97d1-42c95b396ff2",
+        "opens": "sheet",
+        "placement": {
+          "mode": "anchored"
+        },
+        "closeOnSelect": true,
+        "list": {
+          "scope": "currentSeason",
+          "itemWidth": 165.0,
+          "fullWidth": true,
+          "direction": "horizontal"
+        },
+        "data": {
+          "kind": "items",
+          "title": "Episodes",
+          "source": "currentSeason",
+          "item": "One card of the `row` design for each episode of the season now playing, filled through the card's own bindings (title, image, duration, episode number). The selected one is the episode playing."
+        }
+      },
+      "showWhen": "hasEpisodes"
+    },
+    {
+      "id": "quality",
+      "frame": {
+        "cx": 0.4941,
+        "cy": 0.8681,
+        "pivot": {
+          "x": 1.0,
+          "y": 0.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.8681,
+        "pinned": ["right", "top"]
+      },
+      "config": {
+        "panel": "9c0614de-fa5d-4eba-b690-d5b787b32722",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50,
+        "showCurrent": false,
+        "showAuto": true,
+        "button": "icon"
+      },
+      "ties": [
+        {
+          "attr": "top",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "bottom",
+          "constant": 5.63
+        }
+      ],
+      "panel": {
+        "component": "9c0614de-fa5d-4eba-b690-d5b787b32722",
+        "opens": "drawer",
+        "placement": {
+          "mode": "anchored"
+        },
+        "closeOnSelect": true,
+        "data": {
+          "kind": "options",
+          "option": {
+            "label": "The option's name (`option_label`).",
+            "detail": "A short extra, or null (`option_detail`): the quality badge, the audio format.",
+            "selected": "True for the one in use: the `selected` state is applied to its atoms."
+          },
+          "title": "Quality",
+          "source": "renditions",
+          "firstOption": "Auto"
+        }
+      }
+    },
+    {
+      "id": "audio",
+      "frame": {
+        "cx": 0.5059,
+        "cy": 0.8681,
+        "pivot": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.8681,
+        "pinned": ["left", "top"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50,
+        "showCurrent": false
+      },
+      "ties": [
+        {
+          "attr": "leading",
+          "relation": "eq",
+          "to": "quality",
+          "toAttr": "trailing",
+          "constant": 11.25
+        },
+        {
+          "attr": "top",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "bottom",
+          "constant": 5.63
+        }
+      ],
+      "panel": {
+        "opens": "drawer",
+        "placement": {
+          "mode": "anchored"
+        },
+        "closeOnSelect": true,
+        "data": {
+          "kind": "options",
+          "option": {
+            "label": "The option's name (`option_label`).",
+            "detail": "A short extra, or null (`option_detail`): the quality badge, the audio format.",
+            "selected": "True for the one in use: the `selected` state is applied to its atoms."
+          },
+          "title": "Audio",
+          "source": "audioTracks"
+        }
+      },
+      "showWhen": "hasAudioTracks"
+    },
+    {
+      "id": "subtitles",
+      "frame": {
+        "cx": 0.6801,
+        "cy": 0.8681,
+        "pivot": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "sizing": "hug",
+        "w": null,
+        "h": 0.0903,
+        "x": null,
+        "y": 0.8681,
+        "pinned": ["left", "top"]
+      },
+      "config": {
+        "panel": "",
+        "opens": "auto",
+        "closeOnSelect": true,
+        "panelCustom": false,
+        "panelX": 50,
+        "panelY": 50,
+        "showCurrent": false,
+        "showOff": true
+      },
+      "ties": [
+        {
+          "attr": "leading",
+          "relation": "eq",
+          "to": "audio",
+          "toAttr": "trailing",
+          "constant": 11.25
+        },
+        {
+          "attr": "top",
+          "relation": "eq",
+          "to": "seekBar",
+          "toAttr": "bottom",
+          "constant": 5.63
+        }
+      ],
+      "panel": {
+        "opens": "drawer",
+        "placement": {
+          "mode": "anchored"
+        },
+        "closeOnSelect": true,
+        "data": {
+          "kind": "options",
+          "option": {
+            "label": "The option's name (`option_label`).",
+            "detail": "A short extra, or null (`option_detail`): the quality badge, the audio format.",
+            "selected": "True for the one in use: the `selected` state is applied to its atoms."
+          },
+          "title": "Subtitles",
+          "source": "subtitleTracks",
+          "firstOption": "Off"
+        }
+      },
+      "showWhen": "hasSubtitles"
+    }
+  ],
+  "ad": {
+    "controls": [
+      {
+        "id": "adLabel",
+        "frame": {
+          "cx": 0.0234,
+          "cy": 0.0417,
+          "pivot": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "sizing": "hug",
+          "w": null,
+          "h": 0.0903,
+          "x": null,
+          "y": 0.0417,
+          "pinned": ["left", "top"]
+        },
+        "config": {
+          "text": "Ad",
+          "style": "badge"
+        }
+      },
+      {
+        "id": "adCountdown",
+        "frame": {
+          "cx": 0.9766,
+          "cy": 0.0417,
+          "pivot": {
+            "x": 1.0,
+            "y": 0.0
+          },
+          "sizing": "hug",
+          "w": null,
+          "h": 0.0903,
+          "x": null,
+          "y": 0.0417,
+          "pinned": ["right", "top"]
+        },
+        "config": {
+          "format": "mm:ss"
+        }
+      },
+      {
+        "id": "playPause",
+        "frame": {
+          "cx": 0.5,
+          "cy": 0.5,
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "sizing": "fixed",
+          "w": 0.0762,
+          "h": 0.1354,
+          "x": 0.4619,
+          "y": 0.4323,
+          "pinned": ["centerX", "centerY"]
+        },
+        "config": {
+          "panel": "",
+          "opens": "auto",
+          "closeOnSelect": true,
+          "panelCustom": false,
+          "panelX": 50,
+          "panelY": 50
+        }
+      }
+    ]
+  },
+  "behaviour": {
+    "input": "remote",
+    "autoHideSeconds": 5,
+    "initialFocus": "playPause",
+    "focusOrder": [
+      "back",
+      "rewind",
+      "playPause",
+      "forward",
+      "skipIntro",
+      "nextEpisode",
+      "seekBar",
+      "episodes",
+      "quality",
+      "audio",
+      "subtitles"
+    ],
+    "seekStepSeconds": 10,
+    "minTarget": 31.88
+  },
+  "panelContract": {
+    "roles": {
+      "title": "panel_title",
+      "close": "panel_close",
+      "tick": "option_tick",
+      "label": "option_label",
+      "detail": "option_detail"
+    },
+    "repeat": {
+      "property": "repeat",
+      "option": "option"
+    },
+    "state": {
+      "property": "showWhen",
+      "selected": "selected",
+      "unselected": "unselected"
+    },
+    "focus": {
+      "start": "selected",
+      "back": "closes",
+      "after": "button"
+    },
+    "placement": {
+      "drawer": {
+        "edge": "right",
+        "maxWidthPct": 60,
+        "maxHeightPct": 100,
+        "radiusPx": 0.0,
+        "corners": "none",
+        "backdrop": "dim"
+      },
+      "sheet": {
+        "edge": "bottom",
+        "fullWidth": true,
+        "maxWidthPct": null,
+        "maxHeightPct": 80,
+        "radiusPx": 8.0,
+        "corners": "top",
+        "backdrop": "dim"
+      },
+      "modal": {
+        "edge": "centre",
+        "maxWidthPct": null,
+        "maxHeightPct": 80,
+        "radiusPx": 7.0,
+        "corners": "all",
+        "backdrop": "dim"
+      },
+      "popover": {
+        "edge": "above-button",
+        "maxWidthPct": null,
+        "maxHeightPct": null,
+        "radiusPx": 7.0,
+        "corners": "all",
+        "backdrop": "none",
+        "gapPx": 4.0,
+        "marginPx": 8.0
+      }
+    }
+  },
+  "panels": {
+    "9c0614de-fa5d-4eba-b690-d5b787b32722": {
+      "id": "9c0614de-fa5d-4eba-b690-d5b787b32722",
+      "card": {
+        "width": 196.0,
+        "height": 294.0,
+        "shape": "rectangle",
+        "shapePolygon": [],
+        "display": "card",
+        "stretch": null,
+        "imageAspect": "0-2x3",
+        "background": null,
+        "insetImage": null,
+        "shade": [],
+        "border": null,
+        "cornerRadiusFrac": {
+          "topLeft": 0.0204,
+          "topRight": 0.0204,
+          "bottomRight": 0.0204,
+          "bottomLeft": 0.0204
+        },
+        "shadows": [],
+        "focus": null,
+        "contentFit": {
+          "minScale": 0.3,
+          "maxScale": 1.0
+        },
+        "stack": [
+          {
+            "layer": "background",
+            "zIndex": 0
+          },
+          {
+            "layer": "imageElements",
+            "zIndex": 10
+          },
+          {
+            "layer": "insetImage",
+            "zIndex": 20
+          },
+          {
+            "layer": "shade",
+            "zIndex": 30
+          },
+          {
+            "layer": "outline",
+            "zIndex": 40
+          },
+          {
+            "layer": "overlayElements",
+            "zIndex": 100
+          },
+          {
+            "layer": "components",
+            "zIndex": 200
+          }
+        ]
+      },
+      "atoms": [
+        {
+          "id": "title",
+          "type": "box",
+          "atomId": "6911253a-723f-415b-a136-2d88b094ecb4",
+          "builtIn": null,
+          "slot": "flow",
+          "zIndex": null,
+          "frame": null,
+          "scale": 0.7,
+          "action": null,
+          "bind": null,
+          "staticText": null,
+          "showWhen": null,
+          "style": {
+            "layout": {
+              "direction": "row",
+              "justify": "start",
+              "align": "middle",
+              "gap": 5.6,
+              "padding": {
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0,
+                "left": 0.0
+              },
+              "width": null,
+              "height": null,
+              "minWidth": null,
+              "minHeight": null
+            },
+            "box": {
+              "background": null,
+              "border": null,
+              "cornerRadius": null,
+              "opacity": 1.0
+            },
+            "text": null,
+            "meta": null,
+            "image": null,
+            "layers": [
+              {
+                "type": "text",
+                "side": null,
+                "bind": null,
+                "staticText": "Panel title",
+                "color": "#ffffff",
+                "size": null,
+                "emoji": null,
+                "icon": null,
+                "text": {
+                  "fontFamily": "'Inter', system-ui, sans-serif",
+                  "fontSize": 12.6,
+                  "fontWeight": 600,
+                  "lineHeight": 1.2,
+                  "letterSpacing": 0.0,
+                  "color": "#ffffff",
+                  "align": null,
+                  "textCase": "none",
+                  "maxLines": null,
+                  "shadows": []
+                },
+                "slider": null,
+                "focusColor": null,
+                "focusIcon": null
+              }
+            ]
+          },
+          "relative": null,
+          "focus": null,
+          "role": null,
+          "showLogoWhenAvailable": false,
+          "titleSlot": null
+        },
+        {
+          "id": "close",
+          "type": "box",
+          "atomId": "a80a23e9-e410-42e1-aa55-9efe39183f6b",
+          "builtIn": null,
+          "slot": "flow",
+          "zIndex": null,
+          "frame": null,
+          "scale": 0.7,
+          "action": null,
+          "bind": null,
+          "staticText": null,
+          "showWhen": null,
+          "style": {
+            "layout": {
+              "direction": "row",
+              "justify": "center",
+              "align": "middle",
+              "gap": 5.6,
+              "padding": {
+                "top": 5.6,
+                "right": 0.0,
+                "bottom": 5.6,
+                "left": 0.0
+              },
+              "width": null,
+              "height": null,
+              "minWidth": null,
+              "minHeight": null
+            },
+            "box": {
+              "background": {
+                "type": "color",
+                "color": "#1e2330",
+                "gradient": null,
+                "image": null,
+                "scrim": null,
+                "fallbackColor": null
+              },
+              "border": null,
+              "cornerRadius": 1.4,
+              "opacity": 1.0
+            },
+            "text": null,
+            "meta": null,
+            "image": null,
+            "layers": [
+              {
+                "type": "icon",
+                "side": "left",
+                "bind": null,
+                "staticText": null,
+                "color": "#ffffff",
+                "size": 11.2,
+                "emoji": null,
+                "icon": {
+                  "draw": "tint",
+                  "svg": "https://unpkg.com/lucide-static@1.33.0/icons/x.svg",
+                  "vectorDrawable": null,
+                  "png": []
+                },
+                "text": null,
+                "slider": null,
+                "focusColor": null,
+                "focusIcon": null
+              }
+            ]
+          },
+          "relative": null,
+          "focus": null,
+          "role": null,
+          "showLogoWhenAvailable": false,
+          "titleSlot": null
+        },
+        {
+          "id": "tick-on",
+          "type": "box",
+          "atomId": "403cf40b-d0a1-48d1-a366-a2faf716be1c",
+          "builtIn": null,
+          "slot": "flow",
+          "zIndex": null,
+          "frame": null,
+          "scale": 0.7,
+          "action": null,
+          "bind": null,
+          "staticText": null,
+          "showWhen": null,
+          "style": {
+            "layout": {
+              "direction": "row",
+              "justify": "center",
+              "align": "middle",
+              "gap": 5.6,
+              "padding": {
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0,
+                "left": 0.0
+              },
+              "width": null,
+              "height": null,
+              "minWidth": null,
+              "minHeight": null
+            },
+            "box": {
+              "background": null,
+              "border": null,
+              "cornerRadius": null,
+              "opacity": 1.0
+            },
+            "text": null,
+            "meta": null,
+            "image": null,
+            "layers": [
+              {
+                "type": "icon",
+                "side": "left",
+                "bind": null,
+                "staticText": null,
+                "color": "#ea6a00",
+                "size": 14.0,
+                "emoji": null,
+                "icon": {
+                  "draw": "tint",
+                  "svg": "https://unpkg.com/lucide-static@1.33.0/icons/check.svg",
+                  "vectorDrawable": null,
+                  "png": []
+                },
+                "text": null,
+                "slider": null,
+                "focusColor": null,
+                "focusIcon": null
+              }
+            ]
+          },
+          "relative": null,
+          "focus": null,
+          "role": null,
+          "showLogoWhenAvailable": false,
+          "titleSlot": null
+        },
+        {
+          "id": "tick-off",
+          "type": "box",
+          "atomId": "9bb1e286-d62f-462a-9a0b-6872a73d2f86",
+          "builtIn": null,
+          "slot": "flow",
+          "zIndex": null,
+          "frame": null,
+          "scale": 0.7,
+          "action": null,
+          "bind": null,
+          "staticText": null,
+          "showWhen": null,
+          "style": {
+            "layout": {
+              "direction": "row",
+              "justify": "center",
+              "align": "middle",
+              "gap": 5.6,
+              "padding": {
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0,
+                "left": 0.0
+              },
+              "width": null,
+              "height": null,
+              "minWidth": null,
+              "minHeight": null
+            },
+            "box": {
+              "background": null,
+              "border": null,
+              "cornerRadius": null,
+              "opacity": 1.0
+            },
+            "text": null,
+            "meta": null,
+            "image": null,
+            "layers": [
+              {
+                "type": "icon",
+                "side": "left",
+                "bind": null,
+                "staticText": null,
+                "color": "#00000000",
+                "size": 14.0,
+                "emoji": null,
+                "icon": {
+                  "draw": "tint",
+                  "svg": "https://unpkg.com/lucide-static@1.33.0/icons/check.svg",
+                  "vectorDrawable": null,
+                  "png": []
+                },
+                "text": null,
+                "slider": null,
+                "focusColor": null,
+                "focusIcon": null
+              }
+            ]
+          },
+          "relative": null,
+          "focus": null,
+          "role": null,
+          "showLogoWhenAvailable": false,
+          "titleSlot": null
+        },
+        {
+          "id": "label",
+          "type": "box",
+          "atomId": "4a2932ce-05f2-4cf8-aa37-897ed6730aa0",
+          "builtIn": null,
+          "slot": "flow",
+          "zIndex": null,
+          "frame": null,
+          "scale": 0.7,
+          "action": null,
+          "bind": null,
+          "staticText": null,
+          "showWhen": null,
+          "style": {
+            "layout": {
+              "direction": "row",
+              "justify": "start",
+              "align": "middle",
+              "gap": 5.6,
+              "padding": {
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0,
+                "left": 0.0
+              },
+              "width": null,
+              "height": null,
+              "minWidth": null,
+              "minHeight": null
+            },
+            "box": {
+              "background": null,
+              "border": null,
+              "cornerRadius": null,
+              "opacity": 1.0
+            },
+            "text": null,
+            "meta": null,
+            "image": null,
+            "layers": [
+              {
+                "type": "text",
+                "side": null,
+                "bind": null,
+                "staticText": "Option label",
+                "color": "#ffffff",
+                "size": null,
+                "emoji": null,
+                "icon": null,
+                "text": {
+                  "fontFamily": "'Inter', system-ui, sans-serif",
+                  "fontSize": 10.5,
+                  "fontWeight": 500,
+                  "lineHeight": 1.2,
+                  "letterSpacing": 0.0,
+                  "color": "#ffffff",
+                  "align": null,
+                  "textCase": "none",
+                  "maxLines": null,
+                  "shadows": []
+                },
+                "slider": null,
+                "focusColor": null,
+                "focusIcon": null
+              }
+            ]
+          },
+          "relative": null,
+          "focus": null,
+          "role": null,
+          "showLogoWhenAvailable": false,
+          "titleSlot": null
+        },
+        {
+          "id": "detail",
+          "type": "box",
+          "atomId": "f200df35-3d72-48e3-a22a-e8c421338ee4",
+          "builtIn": null,
+          "slot": "flow",
+          "zIndex": null,
+          "frame": null,
+          "scale": 0.7,
+          "action": null,
+          "bind": null,
+          "staticText": null,
+          "showWhen": null,
+          "style": {
+            "layout": {
+              "direction": "row",
+              "justify": null,
+              "align": "top",
+              "gap": 5.6,
+              "padding": {
+                "top": 4.2,
+                "right": 8.4,
+                "bottom": 4.2,
+                "left": 8.4
+              },
+              "width": null,
+              "height": null,
+              "minWidth": null,
+              "minHeight": null
+            },
+            "box": {
+              "background": null,
+              "border": null,
+              "cornerRadius": null,
+              "opacity": 1.0
+            },
+            "text": null,
+            "meta": null,
+            "image": null,
+            "layers": [
+              {
+                "type": "text",
+                "side": null,
+                "bind": null,
+                "staticText": "HD",
+                "color": "#4b5565",
+                "size": null,
+                "emoji": null,
+                "icon": null,
+                "text": {
+                  "fontFamily": "'Inter', system-ui, sans-serif",
+                  "fontSize": 8.4,
+                  "fontWeight": 500,
+                  "lineHeight": 1.2,
+                  "letterSpacing": 0.0,
+                  "color": "#4b5565",
+                  "align": null,
+                  "textCase": "none",
+                  "maxLines": null,
+                  "shadows": []
+                },
+                "slider": null,
+                "focusColor": null,
+                "focusIcon": null
+              }
+            ]
+          },
+          "relative": null,
+          "focus": null,
+          "role": null,
+          "showLogoWhenAvailable": false,
+          "titleSlot": null
+        }
+      ],
+      "components": [],
+      "layoutRules": [],
+      "rank": null
+    }
+  },
+  "rows": {
+    "cda801be-7dd1-46f6-97d1-42c95b396ff2": {
+      "id": "cda801be-7dd1-46f6-97d1-42c95b396ff2",
+      "card": {
+        "width": 245.0,
+        "height": 153.5,
+        "shape": "rectangle",
+        "shapePolygon": [],
+        "display": "card",
+        "stretch": null,
+        "imageAspect": "0-16x9",
+        "background": {
+          "type": "image",
+          "color": null,
+          "gradient": null,
+          "image": {
+            "source": "content",
+            "url": null,
+            "field": null,
+            "fit": "cover",
+            "alignX": "center",
+            "alignY": "center"
+          },
+          "scrim": null,
+          "fallbackColor": null
+        },
+        "insetImage": null,
+        "shade": [
+          {
+            "angle": 0.0,
+            "stops": [
+              {
+                "color": "#000000",
+                "opacity": 0.6,
+                "at": 0.0
+              },
+              {
+                "color": "#000000",
+                "opacity": 0.6,
+                "at": 0.2
+              },
+              {
+                "color": "#000000",
+                "opacity": 0.0,
+                "at": 0.4
+              }
+            ]
+          }
+        ],
+        "border": null,
+        "cornerRadiusFrac": {
+          "topLeft": 0.0163,
+          "topRight": 0.0163,
+          "bottomRight": 0.0163,
+          "bottomLeft": 0.0163
+        },
+        "shadows": [],
+        "focus": {
+          "scale": 1.1,
+          "border": {
+            "width": 1.5,
+            "color": "#ffffff",
+            "sides": []
+          },
+          "glow": {
+            "blur": 12.0,
+            "color": "#ffffff",
+            "opacity": 0.35
+          },
+          "durationMs": 150
+        },
+        "contentFit": {
+          "minScale": 0.3,
+          "maxScale": 1.0
+        },
+        "stack": [
+          {
+            "layer": "background",
+            "zIndex": 0
+          },
+          {
+            "layer": "imageElements",
+            "zIndex": 10
+          },
+          {
+            "layer": "insetImage",
+            "zIndex": 20
+          },
+          {
+            "layer": "shade",
+            "zIndex": 30
+          },
+          {
+            "layer": "outline",
+            "zIndex": 40
+          },
+          {
+            "layer": "overlayElements",
+            "zIndex": 100
+          },
+          {
+            "layer": "components",
+            "zIndex": 200
+          }
+        ]
+      },
+      "atoms": [
+        {
+          "id": "19816aca-1",
+          "type": "box",
+          "atomId": "19816aca-dc26-4ddf-8504-817cea3de0ce",
+          "builtIn": null,
+          "slot": "overlay",
+          "zIndex": 100,
+          "frame": {
+            "cx": 0.08,
+            "cy": 0.86,
+            "pivot": {
+              "x": 0.5,
+              "y": 0.5
+            },
+            "sizing": "hug",
+            "w": null,
+            "h": null,
+            "maxW": 0.16,
+            "pinned": []
+          },
+          "scale": 0.7,
+          "action": null,
+          "bind": null,
+          "staticText": null,
+          "showWhen": null,
+          "style": {
+            "layout": {
+              "direction": "row",
+              "justify": "start",
+              "align": "middle",
+              "gap": 0.0,
+              "padding": {
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0,
+                "left": 0.0
+              },
+              "width": null,
+              "height": null,
+              "minWidth": null,
+              "minHeight": null
+            },
+            "box": {
+              "background": null,
+              "border": null,
+              "cornerRadius": 0.7,
+              "opacity": 1.0
+            },
+            "text": null,
+            "meta": null,
+            "image": null,
+            "layers": [
+              {
+                "type": "icon",
+                "side": "left",
+                "bind": null,
+                "staticText": null,
+                "color": "#ffffff",
+                "size": 14.0,
+                "emoji": null,
+                "icon": {
+                  "draw": "tint",
+                  "svg": "https://unpkg.com/lucide-static@1.33.0/icons/play.svg",
+                  "vectorDrawable": null,
+                  "png": []
+                },
+                "text": null,
+                "slider": null,
+                "focusColor": null,
+                "focusIcon": null
+              }
+            ]
+          },
+          "relative": null,
+          "focus": null,
+          "role": null,
+          "showLogoWhenAvailable": false,
+          "titleSlot": null
+        },
+        {
+          "id": "88f40141-2",
+          "type": "box",
+          "atomId": "88f40141-145d-4b08-a4df-491df47e2633",
+          "builtIn": null,
+          "slot": "overlay",
+          "zIndex": 101,
+          "frame": {
+            "cx": 0.9148,
+            "cy": 0.86,
+            "pivot": {
+              "x": 0.5,
+              "y": 0.5
+            },
+            "sizing": "hug",
+            "w": null,
+            "h": null,
+            "maxW": 0.1705,
+            "pinned": []
+          },
+          "scale": 0.7,
+          "action": null,
+          "bind": null,
+          "staticText": null,
+          "showWhen": null,
+          "style": {
+            "layout": {
+              "direction": "row",
+              "justify": "start",
+              "align": "middle",
+              "gap": 5.6,
+              "padding": {
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0,
+                "left": 0.0
+              },
+              "width": null,
+              "height": null,
+              "minWidth": null,
+              "minHeight": null
+            },
+            "box": {
+              "background": null,
+              "border": null,
+              "cornerRadius": 0.7,
+              "opacity": 1.0
+            },
+            "text": null,
+            "meta": null,
+            "image": null,
+            "layers": [
+              {
+                "type": "text",
+                "side": null,
+                "bind": "durationSeconds",
+                "staticText": null,
+                "color": "#ffffff",
+                "size": null,
+                "emoji": null,
+                "icon": null,
+                "text": {
+                  "fontFamily": "'Inter', system-ui, sans-serif",
+                  "fontSize": 8.4,
+                  "fontWeight": 500,
+                  "lineHeight": 1.2,
+                  "letterSpacing": 0.0,
+                  "color": "#ffffff",
+                  "align": null,
+                  "textCase": "none",
+                  "maxLines": null,
+                  "shadows": []
+                },
+                "slider": null,
+                "focusColor": null,
+                "focusIcon": null
+              }
+            ]
+          },
+          "relative": null,
+          "focus": null,
+          "role": null,
+          "showLogoWhenAvailable": false,
+          "titleSlot": null
+        }
+      ],
+      "components": [
+        {
+          "id": "metadata-component-1",
+          "type": "metadata-component",
+          "sourceComponentId": "2b6938b9-05f5-4f55-8669-478c1871f53a",
+          "slot": "below",
+          "zIndex": null,
+          "frame": null,
+          "atoms": [
+            {
+              "id": "ed8585b4-1",
+              "type": "box",
+              "atomId": "ed8585b4-83e8-4c11-a5cb-4b72b92247fe",
+              "builtIn": null,
+              "slot": null,
+              "zIndex": null,
+              "frame": null,
+              "scale": 0.7,
+              "action": null,
+              "bind": null,
+              "staticText": null,
+              "showWhen": null,
+              "style": {
+                "layout": {
+                  "direction": "row",
+                  "justify": "start",
+                  "align": "middle",
+                  "gap": 5.6,
+                  "padding": {
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0,
+                    "left": 0.0
+                  },
+                  "width": null,
+                  "height": null,
+                  "minWidth": null,
+                  "minHeight": null
+                },
+                "box": {
+                  "background": null,
+                  "border": null,
+                  "cornerRadius": 0.7,
+                  "opacity": 1.0
+                },
+                "text": null,
+                "meta": null,
+                "image": null,
+                "layers": [
+                  {
+                    "type": "text",
+                    "side": null,
+                    "bind": "title",
+                    "staticText": null,
+                    "color": "#ffffff",
+                    "size": null,
+                    "emoji": null,
+                    "icon": null,
+                    "text": {
+                      "fontFamily": "'Inter', system-ui, sans-serif",
+                      "fontSize": 10.5,
+                      "fontWeight": 600,
+                      "lineHeight": 1.2,
+                      "letterSpacing": 0.0,
+                      "color": "#ffffff",
+                      "align": null,
+                      "textCase": "none",
+                      "maxLines": null,
+                      "shadows": []
+                    },
+                    "slider": null,
+                    "focusColor": null,
+                    "focusIcon": null
+                  }
+                ]
+              },
+              "relative": null,
+              "focus": null,
+              "role": "title",
+              "showLogoWhenAvailable": false,
+              "titleSlot": 0.0
+            }
+          ],
+          "autoLayout": {
+            "direction": "vertical",
+            "mainAxis": "start",
+            "crossAxis": "start",
+            "gap": 2.8,
+            "rowGap": null,
+            "wrap": false,
+            "padding": {
+              "top": 0.0,
+              "right": 0.0,
+              "bottom": 0.0,
+              "left": 0.0
+            },
+            "width": {
+              "mode": "fill",
+              "value": null
+            },
+            "height": {
+              "mode": "hug",
+              "value": null
+            },
+            "items": [
+              {
+                "type": "element",
+                "id": "ed8585b4-1",
+                "direction": null,
+                "gap": null,
+                "items": []
+              }
+            ]
+          },
+          "layoutRules": []
+        }
+      ],
+      "layoutRules": [
+        {
+          "id": "rule-1",
+          "item": "88f40141-2",
+          "attr": "leading",
+          "relation": "gte",
+          "target": "19816aca-1",
+          "targetAttr": "trailing",
+          "multiplier": null,
+          "constant": 179.9
+        }
+      ],
+      "rank": null
+    }
+  }
+}
