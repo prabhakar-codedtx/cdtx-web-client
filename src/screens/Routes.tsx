@@ -18,7 +18,8 @@ function Screen({ slug, contentId }: { slug: string | undefined; contentId?: str
   }, [slug, contentId, dt, dispatch]);
 
   if (!slug) return <div>There is nothing to show yet.</div>;
-  if (entry?.data) return <PageScreen key={`${slug}|${contentId ?? ''}`} page={entry.data} />;
+  if (entry?.data)
+    return <PageScreen key={`${slug}|${contentId ?? ''}`} page={entry.data} contentId={contentId} />;
   if (entry?.status === 'failed') {
     return (
       <div role="alert">
@@ -37,7 +38,7 @@ function Screen({ slug, contentId }: { slug: string | undefined; contentId?: str
 export function TabRoute() {
   const { slug } = useParams<{ slug: string }>();
   const tabs = useAppSelector((s) => s.launch.tabs);
-  return <Screen slug={slug ?? (tabs.find((t) => t.is_default) ?? tabs[0])?.slug} />;
+  return <Screen slug={slug ?? (tabs.find((t) => t.isDefault) ?? tabs[0])?.slug} />;
 }
 
 /** `/title/:type/:id`: the detail screen for that kind of title, opened for that title. */

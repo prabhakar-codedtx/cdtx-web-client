@@ -1,65 +1,88 @@
-import type { CSSProperties, ReactNode } from 'react';
-import type { CardElement, ElementProps, Subview, TitleItem } from '@/lib/api/types';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import type { Atom, IconFiles, Layer, Title } from '@/lib/api/types';
 import { assetUrl } from '@/lib/api/endpoints';
-import { itemText, metaSegments, pictureField } from '@/lib/render/fields';
-import { px } from '@/lib/render/units';
+import { imageSrc, metaSegments, shown, titleText } from '@/lib/render/fields';
+import { fillCss, objectFitCss, paddingCss, rgba, strokeCss, textCss } from '@/lib/render/paint';
 
 /**
- * The parts a card is made of, each drawn only from its JSON. A length is the design's px times the
- * part's own `scale` times the card's `fit` (`u` below); a colour, a text and a picture are read as sent.
+ * The atoms a card is made of, each drawn only from its JSON (`atom.type`: text, box, meta, image).
+ * Every length in `style` is final for the designed card; it is drawn times the card's `fit` (`k`).
+ * A colour, a text and a picture are read as sent.
  */
 
 export interface PartCtx {
-  item: TitleItem | null;
-  /** The card's `fit` (how much smaller than designed it is drawn). */
+  title: Title | null;
+  /** The card's `fit` (how much smaller or bigger than designed it is drawn). */
   fit: number;
-  /** Aspect of the title's picture the card asks for (`presentation.contentImageAspect`). */
-  aspect: string;
-  /** A tap on a part that has an `action` (play, like, watchlist ...). */
-  onAction?: (action: string, item: TitleItem | null) => void;
-}
-
-const unit = (el: CardElement, ctx: PartCtx): number => (el.scale ?? 1) * ctx.fit;
-
-/**
- * One length to draw: the final one the server sent (times the card's `fit`), else the design's px
- * times the part's `scale` (a server that does not send final sizes yet).
- */
-function len(
-  final: number | undefined,
-  design: number | undefined,
-  el: CardElement,
-  ctx: PartCtx,
-): number | undefined {
-  if (final !== undefined) return final * ctx.fit;
-  return design === undefined ? undefined : design * unit(el, ctx);
+  /** The drawn card's width: what `cornerRadiusFrac` is a fraction of. */
+  cardW: number;
+  /** Which of the title's pictures the card shows (`card.imageAspect`). */
+  aspect: string | null;
+  /** A tap on an atom that has an `action` (play, more_info, watchlist ...). */
+  onAction?: (action: string, title: Title | null) => void;
 }
 
 const FLEX: Record<string, string> = {
   start: 'flex-start',
   top: 'flex-start',
+  left: 'flex-start',
   center: 'center',
   middle: 'center',
   end: 'flex-end',
   bottom: 'flex-end',
+  right: 'flex-end',
   between: 'space-between',
   'space-between': 'space-between',
   'space-around': 'space-around',
   'space-evenly': 'space-evenly',
   stretch: 'stretch',
 };
-/** The JSON's alignment as CSS; absent when the JSON sends none. */
-export const flexOf = (v: string | undefined): string | undefined => (v ? FLEX[v] : undefined);
+/** The JSON's alignment as CSS; nothing when the JSON sends none. */
+export const flexOf = (v: string | null | undefined): string | undefined => (v ? FLEX[v] : undefined);
+
+const times = (v: number | null | undefined, k: number): number | undefined =>
+  v === null || v === undefined ? undefined : v * k;
+
+/** An atom is drawn only when the title has its badge and it has something to show. */
+export function isDrawn(atom: Atom, title: Title | null): boolean {
+  if (!shown(atom, title)) return false;
+  if (atom.type === 'text') return Boolean(atomText(atom, title) || logoOf(atom, title));
+  if (atom.type === 'meta') return atom.style.meta ? metaSegments(atom.style.meta, title).length > 0 : false;
+  if (atom.type === 'image') return Boolean(imageOf(atom, title, null));
+  return atom.type === 'box';
+}
+
+const atomText = (atom: Atom, title: Title | null): string =>
+  atom.bind ? titleText(title, atom.bind) : (atom.staticText ?? '');
+
+const logoOf = (atom: Atom, title: Title | null): string | null =>
+  atom.showLogoWhenAvailable && title?.logoUrl ? title.logoUrl : null;
+
+/** An image atom's picture: the title key `bind` names, else its `style.image`. */
+function imageOf(atom: Atom, title: Title | null, aspect: string | null): string | null {
+  if (atom.bind) {
+    const v = title?.[atom.bind];
+    return typeof v === 'string' && v ? v : null;
+  }
+  return imageSrc(atom.style.image, title, aspect);
+}
 
 // ---- icons ------------------------------------------------------------------------------------
 
-function IconPart({ sv, size, color }: { sv: Subview; size: number | undefined; color?: string }) {
-  const file = sv.iconAsset?.svg ?? sv.iconSvgUrl;
-  const src = file ? assetUrl(file) : undefined;
+function Icon({
+  files,
+  size,
+  color,
+}: {
+  files: IconFiles | null;
+  size: number | undefined;
+  color: string | undefined;
+}) {
+  const src = files?.svg ? assetUrl(files.svg) : undefined;
   if (!src) return null;
-  const tintable = sv.iconAsset ? sv.iconAsset.tintable : true;
-  if (!tintable) return <img src={src} alt="" style={{ width: size, height: size }} />;
-  // A tintable icon is drawn in its JSON colour through the SVG's shape.
+  // `as-is`: the file is already painted in its colour; `tint`: painted the layer's colour here.
+  if (files!.draw !== 'tint')
+    return <img src={src} alt="" draggable={false} style={{ width: size, height: size }} />;
   const mask = `url("${src}") center / contain no-repeat`;
   return (
     <span
@@ -76,212 +99,161 @@ function IconPart({ sv, size, color }: { sv: Subview; size: number | undefined; 
   );
 }
 
-// ---- a box with icon / text / slider layers (a button, a badge) --------------------------------
+// ---- a box: a button, a pill, a badge --------------------------------------------------------
 
-function renderSubviews(el: CardElement, ctx: PartCtx): ReactNode[] {
-  const subviews = [...(el.properties.subviews ?? [])];
-  const order = (s: Subview) => (s.side === 'left' ? 0 : s.side === 'right' ? 2 : 1);
-  subviews.sort((a, b) => order(a) - order(b));
-  return subviews.map((sv, i) => {
-    if (sv.kind === 'icon') {
+function layerView(layer: Layer, i: number, ctx: PartCtx, focusColor: string | null): ReactNode {
+  const k = ctx.fit;
+  const color = rgba(focusColor ?? layer.color);
+  if (layer.type === 'icon') {
+    if (layer.emoji)
       return (
-        <IconPart
-          key={i}
-          sv={sv}
-          size={len(sv.drawSizePx, sv.renderSize ?? sv.size, el, ctx)}
-          color={sv.renderColor}
-        />
-      );
-    }
-    if (sv.kind === 'text') {
-      const t = sv.renderTypography ?? {};
-      const text = sv.bind ? itemText(ctx.item, sv.bind) : (sv.renderText ?? '');
-      return (
-        <span
-          key={i}
-          style={{
-            color: sv.renderColor,
-            fontFamily: t.fontFamily,
-            fontSize: len(sv.drawFontSizePx, t.fontSize, el, ctx),
-            fontWeight: t.fontWeight,
-            letterSpacing: len(sv.drawLetterSpacingPx, t.letterSpacing, el, ctx),
-            lineHeight: t.lineHeightPct !== undefined ? `${t.lineHeightPct}%` : undefined,
-            textTransform: textTransform(t.textCase),
-          }}
-        >
-          {text}
+        <span key={i} style={{ fontSize: times(layer.size, k), lineHeight: 1 }}>
+          {layer.emoji}
         </span>
       );
-    }
-    if (sv.kind === 'slider') {
-      // The track at its JSON height, least width, corner and colour (it grows to fill its box);
-      // the fill is `staticValue` percent of it, cut to the track's corners.
-      const value = sv.staticValue ?? 0;
-      const corner = len(sv.drawCornerPx, undefined, el, ctx);
-      return (
-        <span
-          key={i}
-          style={{
-            display: 'block',
-            flexGrow: 1,
-            height: len(sv.drawHeightPx, sv.height, el, ctx),
-            minWidth: len(sv.drawMinWidthPx, undefined, el, ctx),
-            borderRadius: corner,
-            overflow: corner ? 'hidden' : undefined,
-            background: sv.renderTrackColor,
-          }}
-        >
-          <span
-            style={{
-              display: 'block',
-              height: '100%',
-              width: `${Math.max(0, Math.min(100, value))}%`,
-              background: sv.renderFillColor,
-            }}
-          />
-        </span>
-      );
-    }
-    return null;
-  });
-}
-
-/**
- * A placed part's own size (`px.width`/`height`, `px.minWidth`/`minHeight`), times the card's `fit`.
- * The sizes are the part's outer box (its frame), so padding and border sit inside them.
- */
-function sizeCss(el: CardElement, ctx: PartCtx): CSSProperties {
-  const f = el.px;
-  const at = (v: number | undefined) => (v === undefined ? undefined : v * ctx.fit);
-  const css: CSSProperties = {
-    width: at(f?.width),
-    height: at(f?.height),
-    minWidth: at(f?.minWidth),
-    minHeight: at(f?.minHeight),
-  };
-  const sized = Object.values(css).some((v) => v !== undefined);
-  return sized ? { ...css, boxSizing: 'border-box' } : {};
-}
-
-function boxStyle(el: CardElement, ctx: PartCtx): CSSProperties {
-  const p = el.properties;
-  const r = p.render;
-  const fx = el.px;
-  const width = len(fx?.borderWidth, r?.borderWidthPx, el, ctx);
-  // The JSON sends a colour and a width per side; a side with neither has no border.
-  const side = (c: string | null | undefined) => (c && width ? `${width}px solid ${c}` : undefined);
-  const pad = (final: number | undefined, design: number | undefined) => len(final, design, el, ctx);
-  const bg = r?.background;
-  return {
-    // A flex box, not an inline one: inline, it would sit on a text line and gain the line's
-    // descender space under it.
-    display: 'flex',
-    flexDirection: p.layoutDirection,
-    justifyContent: flexOf(p.justify),
-    alignItems: flexOf(p.verticalAlign),
-    gap: len(fx?.gap, p.gap, el, ctx),
-    paddingTop: pad(fx?.padding?.top, p.paddingTop),
-    paddingRight: pad(fx?.padding?.right, p.paddingRight),
-    paddingBottom: pad(fx?.padding?.bottom, p.paddingBottom),
-    paddingLeft: pad(fx?.padding?.left, p.paddingLeft),
-    opacity: p.opacity !== undefined ? p.opacity / 100 : undefined,
-    backgroundColor: bg?.color ?? undefined,
-    backgroundImage: bg?.imageUrl ? `url("${bg.imageUrl}")` : (bg?.gradient ?? undefined),
-    borderTop: side(r?.border?.top),
-    borderRight: side(r?.border?.right),
-    borderBottom: side(r?.border?.bottom),
-    borderLeft: side(r?.border?.left),
-    borderRadius:
-      el.corner?.px != null
-        ? len(fx?.corner, el.corner.px, el, ctx)
-        : el.corner?.pct != null
-          ? `${el.corner.pct}%`
-          : undefined,
-    ...sizeCss(el, ctx),
-  };
-}
-
-/**
- * A box of icon / text / slider layers. One with an `action` is tappable, but it is still a plain
- * box (not a `<button>`), so the browser adds no look of its own: everything shown is the JSON's.
- */
-export function AtomBox({ el, ctx, style }: { el: CardElement; ctx: PartCtx; style?: CSSProperties }) {
-  const content = renderSubviews(el, ctx);
-  const css: CSSProperties = { ...boxStyle(el, ctx), ...style };
-  if (el.action) {
-    const act = (e: { stopPropagation: () => void }) => {
-      e.stopPropagation();
-      ctx.onAction?.(el.action!, ctx.item);
-    };
+    const files = focusColor && layer.focusIcon ? layer.focusIcon : layer.icon;
+    return <Icon key={i} files={files} size={times(layer.size, k)} color={color} />;
+  }
+  if (layer.type === 'text') {
+    const text = layer.bind ? titleText(ctx.title, layer.bind) : (layer.staticText ?? '');
+    if (!text) return null;
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={el.name}
-        data-action={el.action}
-        onClick={act}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            act(e);
-          }
-        }}
-        style={css}
-      >
-        {content}
-      </div>
+      <span key={i} style={{ ...textCss(layer.text, k), ...(color ? { color } : {}) }}>
+        {text}
+      </span>
     );
   }
-  return <div style={css}>{content}</div>;
+  if (layer.type === 'slider' && layer.slider) {
+    const s = layer.slider;
+    // 0-1; a value above 1 is a percent (known data issue).
+    const v = s.value ?? 0;
+    const frac = Math.max(0, Math.min(1, v > 1 ? v / 100 : v));
+    const corner = times(s.cornerRadius, k);
+    return (
+      <span
+        key={i}
+        style={{
+          display: 'block',
+          flexGrow: 1,
+          height: times(s.height, k),
+          minWidth: times(s.minWidth, k),
+          borderRadius: corner,
+          overflow: corner ? 'hidden' : undefined,
+          background: rgba(s.trackColor),
+        }}
+      >
+        <span
+          style={{
+            display: 'block',
+            height: '100%',
+            width: `${frac * 100}%`,
+            background: rgba(s.progressColor),
+          }}
+        />
+      </span>
+    );
+  }
+  return null;
 }
 
-// ---- text ---------------------------------------------------------------------------------------
-
-/** The JSON's `textCase` as CSS (`none` / absent: the words as written). */
-function textTransform(textCase: string | undefined): CSSProperties['textTransform'] {
-  return textCase === 'uppercase' || textCase === 'lowercase' || textCase === 'capitalize'
-    ? textCase
-    : undefined;
+/** The size `style.layout` gives an atom (its outer box), times `k`. */
+function sizeCss(atom: Atom, k: number): CSSProperties {
+  const l = atom.style.layout;
+  const css: CSSProperties = {
+    width: times(l.width, k),
+    height: times(l.height, k),
+    minWidth: times(l.minWidth, k),
+    minHeight: times(l.minHeight, k),
+  };
+  return Object.values(css).some((v) => v !== undefined) ? { ...css, boxSizing: 'border-box' } : {};
 }
 
-/** A text part's line height: final px when sent, else a bare multiple of its font size. */
-function lineHeightOf(el: CardElement, ctx: PartCtx): CSSProperties['lineHeight'] {
-  if (el.px?.lineHeight !== undefined) return `${el.px.lineHeight * ctx.fit}px`;
-  const v = el.properties.lineHeight;
-  if (typeof v === 'number') return v;
-  return typeof v === 'string' && v.trim() !== '' && !v.trim().endsWith('px') ? v : undefined;
+function BoxPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSProperties }) {
+  const [focused, setFocused] = useState(false);
+  const k = ctx.fit;
+  const { layout, box } = atom.style;
+  const order = (l: Layer) => (l.side === 'left' ? 0 : l.side === 'right' ? 2 : 1);
+  const layers = [...atom.style.layers].sort((a, b) => order(a) - order(b));
+  // TV: the atom's own focus look (`atom.focus`), and each layer's `focusColor` / `focusIcon`.
+  const f = focused ? atom.focus : null;
+  const css: CSSProperties = {
+    // A flex box, not an inline one: inline, it would sit on a text line and gain its descender space.
+    display: 'flex',
+    flexDirection: layout.direction === 'column' ? 'column' : 'row',
+    justifyContent: flexOf(layout.justify),
+    alignItems: flexOf(layout.align),
+    gap: times(layout.gap, k),
+    ...paddingCss(layout.padding, k),
+    ...sizeCss(atom, k),
+    ...fillCss(f?.background ?? box.background),
+    ...strokeCss(f?.border ?? box.border, k),
+    borderRadius: times(box.cornerRadius, k),
+    opacity: box.opacity,
+    ...(atom.focus
+      ? { transition: 'transform 150ms', transform: f?.scale ? `scale(${f.scale})` : undefined }
+      : {}),
+    ...style,
+  };
+  const content = layers.map((l, i) => layerView(l, i, ctx, f ? (l.focusColor ?? f.color) : null));
+  if (!atom.action) return <div style={css}>{content}</div>;
+  const act = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    ctx.onAction?.(atom.action!, ctx.title);
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={atom.staticText ?? atom.action}
+      data-action={atom.action}
+      onClick={act}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          act(e);
+        }
+      }}
+      onFocus={atom.focus ? () => setFocused(true) : undefined}
+      onBlur={atom.focus ? () => setFocused(false) : undefined}
+      style={{ ...css, outline: atom.focus ? 'none' : undefined }}
+    >
+      {content}
+    </div>
+  );
 }
 
-export function TextPart({ el, ctx, style }: { el: CardElement; ctx: PartCtx; style?: CSSProperties }) {
-  const p = el.properties;
-  const text = el.bind ? itemText(ctx.item, el.bind) : (el.text ?? '');
+// ---- text --------------------------------------------------------------------------------------
+
+function TextPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSProperties }) {
+  const k = ctx.fit;
+  // The title's logo instead of its name, in a `titleSlot`-high box, when it has one.
+  const logo = logoOf(atom, ctx.title);
+  if (logo)
+    return (
+      <img
+        src={logo}
+        alt={ctx.title?.title ?? ''}
+        draggable={false}
+        style={{
+          height: times(atom.titleSlot, k),
+          maxWidth: '100%',
+          objectFit: 'contain',
+          objectPosition: 'left center',
+          ...style,
+        }}
+      />
+    );
+  const text = atomText(atom, ctx.title);
   if (!text) return null;
-  const size = len(el.px?.fontSize, px(p.fontSize), el, ctx);
-  const clamp = typeof p.lineClamp === 'number' && p.lineClamp > 0 ? p.lineClamp : undefined;
-  const shadow = (p.textShadows ?? [])
-    .map((s) => `${s.xPx * ctx.fit}px ${s.yPx * ctx.fit}px ${s.blurPx * ctx.fit}px ${s.color}`)
-    .join(', ');
   return (
     <div
       style={{
-        color: p.textColor,
-        fontFamily: p.fontFamily,
-        fontSize: size,
-        fontWeight: p.fontWeight as CSSProperties['fontWeight'],
-        textAlign: p.textAlign as CSSProperties['textAlign'],
-        textTransform: textTransform(p.textCase),
-        letterSpacing: len(el.px?.letterSpacing, px(p.letterSpacing), el, ctx),
-        lineHeight: lineHeightOf(el, ctx),
-        textShadow: shadow || undefined,
-        ...sizeCss(el, ctx),
-        ...(clamp
-          ? {
-              display: '-webkit-box',
-              WebkitLineClamp: clamp,
-              WebkitBoxOrient: 'vertical' as const,
-              overflow: 'hidden',
-            }
-          : {}),
+        ...textCss(atom.style.text, k),
+        ...paddingCss(atom.style.layout.padding, k),
+        ...sizeCss(atom, k),
+        ...fillCss(atom.style.box.background),
+        borderRadius: times(atom.style.box.cornerRadius, k),
+        opacity: atom.style.box.opacity,
         ...style,
       }}
     >
@@ -290,36 +262,39 @@ export function TextPart({ el, ctx, style }: { el: CardElement; ctx: PartCtx; st
   );
 }
 
-// ---- the metadata line -----------------------------------------------------------------------
+// ---- the metadata line -------------------------------------------------------------------------
 
-export function MetaRow({ el, ctx, style }: { el: CardElement; ctx: PartCtx; style?: CSSProperties }) {
-  const p: ElementProps = el.properties;
-  const segments = metaSegments(p, ctx.item);
+function MetaPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSProperties }) {
+  const meta = atom.style.meta;
+  if (!meta) return null;
+  const segments = metaSegments(meta, ctx.title);
   if (segments.length === 0) return null;
-  const size = len(el.px?.fontSize, px(p.fontSize), el, ctx);
-  const gap = len(el.px?.metaGap, p.metaGapPx, el, ctx);
+  const k = ctx.fit;
+  const gap = times(meta.gap, k);
+  // A line of fields: the text style without its line cut (each field is kept whole).
+  const text = textCss(atom.style.text ? { ...atom.style.text, maxLines: null } : null, k);
   return (
     <div
       style={{
         display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
         columnGap: gap,
-        color: p.textColor,
-        fontSize: size,
-        fontWeight: p.fontWeight as CSSProperties['fontWeight'],
-        ...sizeCss(el, ctx),
+        ...text,
+        ...sizeCss(atom, k),
         ...style,
       }}
     >
       {segments.map((s, i) => (
         <span key={s.key} style={{ display: 'inline-flex', columnGap: gap }}>
-          {i > 0 && s.display !== 'badge' && segments[i - 1]!.display !== 'badge' && p.metaSeparator ? (
-            <span aria-hidden>{p.metaSeparator}</span>
+          {i > 0 && s.display !== 'badge' && segments[i - 1]!.display !== 'badge' && meta.separator ? (
+            <span aria-hidden>{meta.separator}</span>
           ) : null}
           {/* A badge is the value on its colour; the JSON sends no other badge look. */}
           {s.display === 'badge' ? (
-            <span style={{ background: s.color }}>{s.value}</span>
+            <span style={{ background: rgba(s.color) }}>{s.value}</span>
           ) : (
-            <span style={{ color: s.color }}>{s.value}</span>
+            <span style={{ color: rgba(s.color) }}>{s.value}</span>
           )}
         </span>
       ))}
@@ -327,95 +302,94 @@ export function MetaRow({ el, ctx, style }: { el: CardElement; ctx: PartCtx; sty
   );
 }
 
-// ---- a picture -----------------------------------------------------------------------------------
-
-/** `fit` as CSS: `width` / `height` fit that side and keep the picture's own ratio. */
-function fitCss(fit: string): CSSProperties {
-  if (fit === 'cover' || fit === 'contain' || fit === 'fill') return { objectFit: fit };
-  if (fit === 'width') return { width: '100%', height: 'auto' };
-  if (fit === 'height') return { height: '100%', width: 'auto' };
-  return {};
-}
+// ---- a picture ---------------------------------------------------------------------------------
 
 const CORNER: Record<string, string> = {
-  topLeft: 'borderTopLeftRadius',
-  topRight: 'borderTopRightRadius',
-  bottomRight: 'borderBottomRightRadius',
-  bottomLeft: 'borderBottomLeftRadius',
   'top-left': 'borderTopLeftRadius',
   'top-right': 'borderTopRightRadius',
   'bottom-right': 'borderBottomRightRadius',
   'bottom-left': 'borderBottomLeftRadius',
+  topLeft: 'borderTopLeftRadius',
+  topRight: 'borderTopRightRadius',
+  bottomRight: 'borderBottomRightRadius',
+  bottomLeft: 'borderBottomLeftRadius',
 };
 
-/** `radiusFrac` on the corners `roundedCorners` names (none named: every corner). */
-function cornersCss(view: NonNullable<CardElement['image']>): CSSProperties {
-  if (!(view.radiusFrac > 0)) return {};
-  const r = `${view.radiusFrac * 100}%`;
-  const named = (view.roundedCorners ?? []).map((c) => CORNER[c]).filter(Boolean) as string[];
-  if (named.length === 0) return { borderRadius: r };
-  return Object.fromEntries(named.map((k) => [k, r])) as CSSProperties;
-}
-
-/** A picture part: the title's own picture (a field the JSON names) or a fixed address. */
-export function ImagePart({
-  el,
+function ImagePart({
+  atom,
   ctx,
   fillFrame,
   style,
 }: {
-  el: CardElement;
+  atom: Atom;
   ctx: PartCtx;
-  /** In a frame the part fills it; in a flow it takes the size its settings say. */
+  /** In a sized frame the picture fills it; in a flow it takes the size its style says. */
   fillFrame: boolean;
   style?: CSSProperties;
 }) {
-  const view = el.image!;
-  const src = view.source === 'content' ? pictureField(ctx.item, view.contentField, ctx.aspect) : view.url;
+  const view = atom.style.image;
+  const src = imageOf(atom, ctx.title, ctx.aspect);
   if (!src) return null;
-  const p = el.properties;
-  const w = len(el.px?.width, p.customWidthPx, el, ctx);
-  const h = len(el.px?.height, p.customHeightPx, el, ctx);
+  const k = ctx.fit;
+  const l = atom.style.layout;
+  // `cornerRadiusFrac` is of the card's width, on the corners `roundedCorners` lists (none: all).
+  const r = view?.cornerRadiusFrac ? view.cornerRadiusFrac * ctx.cardW : 0;
+  const named = (view?.roundedCorners ?? []).map((c) => CORNER[c]).filter(Boolean) as string[];
+  const corners: CSSProperties = !r
+    ? {}
+    : named.length
+      ? Object.fromEntries(named.map((c) => [c, r]))
+      : { borderRadius: r };
   return (
     <img
       src={src}
       alt=""
       draggable={false}
       style={{
-        objectPosition: `${view.alignH} ${view.alignV}`,
-        opacity: view.opacity,
-        aspectRatio: view.aspectRatio ?? undefined,
+        display: 'block',
+        boxSizing: 'border-box',
+        ...objectFitCss(view),
+        opacity: view?.opacity,
+        aspectRatio: view?.aspectRatio ?? undefined,
         ...(fillFrame
           ? { width: '100%', height: '100%' }
-          : view.fillWidth
-            ? { width: '100%', height: h }
-            : { width: w, height: h }),
-        ...fitCss(view.fit),
-        ...cornersCss(view),
+          : view?.fillWidth
+            ? { width: '100%', height: times(l.height, k) }
+            : { width: times(l.width, k), height: times(l.height, k) }),
+        ...strokeCss(view?.border, k),
+        ...corners,
         ...style,
       }}
     />
   );
 }
 
-// ---- one part, whatever it is --------------------------------------------------------------------
+// ---- one atom, whatever it is ------------------------------------------------------------------
 
-/** Which kind of part this is, from its JSON: a metadata line, a picture, a box with layers, or text. */
-export function ElementView({
-  el,
+/** Draws one atom by its `type`; one the title does not show (a badge it lacks) is not drawn at all. */
+export function AtomView({
+  atom,
   ctx,
   inFrame,
   style,
 }: {
-  el: CardElement;
+  atom: Atom;
   ctx: PartCtx;
   inFrame: boolean;
   style?: CSSProperties;
 }) {
-  if (el.hidden) return null;
-  if (el.type === 'meta-row') return <MetaRow el={el} ctx={ctx} style={style} />;
-  if (el.image)
-    return <ImagePart el={el} ctx={ctx} fillFrame={inFrame && Boolean(el.frame?.w)} style={style} />;
-  if ((el.properties.subviews?.length ?? 0) > 0) return <AtomBox el={el} ctx={ctx} style={style} />;
-  return <TextPart el={el} ctx={ctx} style={style} />;
+  if (!shown(atom, ctx.title)) return null;
+  switch (atom.type) {
+    case 'text':
+      return <TextPart atom={atom} ctx={ctx} style={style} />;
+    case 'box':
+      return <BoxPart atom={atom} ctx={ctx} style={style} />;
+    case 'meta':
+      return <MetaPart atom={atom} ctx={ctx} style={style} />;
+    case 'image':
+      return <ImagePart atom={atom} ctx={ctx} fillFrame={inFrame && atom.frame?.w != null} style={style} />;
+    default:
+      // An unknown kind: draw nothing.
+      return null;
+  }
 }

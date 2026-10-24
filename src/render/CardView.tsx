@@ -1,55 +1,49 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import styled from 'styled-components';
-import type {
-  AutoLayout,
-  CardDesign,
-  CardElement,
-  CompositeComponent,
-  Frame,
-  PictureFit,
-  Presentation,
-  TitleItem,
-} from '@/lib/api/types';
-import { imageFor } from '@/lib/render/fields';
+import type { Atom, Block, Card, Component, Frame, LayoutItem, Rule, Title } from '@/lib/api/types';
+import { imageSrc } from '@/lib/render/fields';
 import { fitOf } from '@/lib/render/units';
+import {
+  boxShadowCss,
+  fillCss,
+  gradientCss,
+  objectFitCss,
+  paddingCss,
+  polygonCss,
+  rgba,
+  strokeCss,
+} from '@/lib/render/paint';
 import { resolveLayout } from '@/lib/layout/resolve';
-import type { Box, LayoutRule } from '@/lib/layout/types';
-import { ElementView, flexOf, type PartCtx } from '@/render/Parts';
+import type { Attribute, Box, LayoutRule, Relation } from '@/lib/layout/types';
+import { AtomView, flexOf, isDrawn, type PartCtx } from '@/render/Parts';
 
 /**
- * One card, drawn from its design JSON and one title. Nothing about how it looks is decided here:
- * the layers are the ones `presentation.stack` lists, every part sits where its `frame` says,
- * and the lengths are the design's px times the part's `scale` times the card's `fit`.
+ * One card: a block (`page.blocks[rail.blockKey]`) and one title. Nothing about how it looks is
+ * decided here: the layers are the ones `card.stack` lists, every atom and component sits where its
+ * `frame` says (fractions of the drawn card), and every length is the JSON's times the card's `fit`.
  */
 
 // ---- frames -----------------------------------------------------------------------------------
 
 /**
- * A frame is a placement as fractions of the card: where, and (when known) how big. A box that is
- * `fixed` or `min` keeps the size it was designed at (its fraction of the *designed* card, times the
- * card's `fit`), so a card drawn wider or taller than it was designed (a hero that fills the
- * window) moves its parts but does not stretch them; a `fill` box follows the card.
+ * A frame as CSS: the box's `pivot` point sits on (`cx`, `cy`). A `fixed` or `min` box keeps the size
+ * it was designed at (its fraction of the designed card, times `fit`), so a card drawn wider than it
+ * was designed (a hero that fills the window) moves its parts but does not stretch them; a `fill`
+ * box follows the card. A box with no `w` hugs its content, at most `maxW` of the card.
  */
-function frameCss(f: Frame, W: number, H: number, design: { w: number; h: number }): CSSProperties {
-  const sizeW = f.sizing === 'fill' ? W : design.w;
-  const sizeH = f.sizing === 'fill' ? H : design.h;
-  const hasX = f.x !== null && f.w !== null;
-  const hasY = f.y !== null && f.h !== null;
-  const css: CSSProperties = {
-    position: 'absolute',
-    left: hasX ? f.x! * W : f.cx * W,
-    top: hasY ? f.y! * H : f.cy * H,
-  };
-  const tx = hasX ? 0 : -f.pivot.x * 100;
-  const ty = hasY ? 0 : -f.pivot.y * 100;
+function frameCss(f: Frame, W: number, H: number, designed: { w: number; h: number }): CSSProperties {
+  const sizeW = f.sizing === 'fill' ? W : designed.w;
+  const sizeH = f.sizing === 'fill' ? H : designed.h;
+  const css: CSSProperties = { position: 'absolute', left: (f.cx ?? 0) * W, top: (f.cy ?? 0) * H };
+  const tx = -(f.pivot.x ?? 0) * 100;
+  const ty = -(f.pivot.y ?? 0) * 100;
   if (tx !== 0 || ty !== 0) css.transform = `translate(${tx}%, ${ty}%)`;
   if (f.w !== null) {
     if (f.sizing === 'min') css.minWidth = f.w * sizeW;
     else css.width = f.w * sizeW;
   } else {
-    // A box that hugs its content is as wide as its content, up to `maxW` of the card. Without
-    // this the browser sizes it in the room right of `left` (before the translate moves it back),
-    // so badges pinned top-right would wrap one per line.
+    // Hug: as wide as its content, up to `maxW` of the card. Without `max-content` the browser would
+    // size it in the room right of `left`, so a box pinned top-right would wrap one word per line.
     css.width = 'max-content';
     css.maxWidth = (f.maxW ?? 1) * W;
   }
@@ -60,53 +54,40 @@ function frameCss(f: Frame, W: number, H: number, design: { w: number; h: number
   return css;
 }
 
-/** Where a frame puts its top-left corner when the box has this size. */
-function naturalOrigin(f: Frame, W: number, H: number, w: number, h: number): { x: number; y: number } {
+/** Where a frame puts the box's top-left corner when the box has this size. */
+const originOf = (f: Frame, W: number, H: number, w: number, h: number) => ({
+  x: (f.cx ?? 0) * W - (f.pivot.x ?? 0) * w,
+  y: (f.cy ?? 0) * H - (f.pivot.y ?? 0) * h,
+});
+
+/** A schema 3 rule for the shared resolver: nulls are "not given" (`multiplier` null = 1). */
+function toLayoutRule(r: Rule, k: number): LayoutRule | null {
+  if (!r.id || !r.item || !r.attr || !r.relation) return null;
   return {
-    x: f.x !== null && f.w !== null ? f.x * W : f.cx * W - f.pivot.x * w,
-    y: f.y !== null && f.h !== null ? f.y * H : f.cy * H - f.pivot.y * h,
+    id: r.id,
+    item: r.item,
+    attr: r.attr as Attribute,
+    relation: r.relation as Relation,
+    target: r.target ?? undefined,
+    targetAttr: (r.targetAttr ?? undefined) as Attribute | undefined,
+    multiplier: r.multiplier ?? undefined,
+    constant: (r.constant ?? 0) * k,
   };
 }
 
-// ---- colours and edges ----------------------------------------------------------------------------
+// ---- a component (an auto layout) --------------------------------------------------------------
 
-function withAlpha(color: string, alpha: number): string {
-  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
-  if (!m) return color;
-  let hex = m[1]!;
-  if (hex.length === 3) hex = [...hex].map((c) => c + c).join('');
-  const n = parseInt(hex, 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+/** The atoms an auto layout lists, nested groups included (an atom no item lists is not drawn). */
+function listed(items: LayoutItem[]): string[] {
+  return items.flatMap((it) => (it.type === 'group' ? listed(it.items) : it.id ? [it.id] : []));
 }
 
-function borderCss(b: NonNullable<Presentation['border']>): CSSProperties {
-  if (!b.color || b.widthPx <= 0) return {};
-  const line = `${b.widthPx}px solid ${b.color}`;
-  const sides = b.edges === 'all' ? ['top', 'right', 'bottom', 'left'] : b.edges.split(/[\s,+-]+/);
-  const css: Record<string, string> = {};
-  for (const s of sides)
-    if (['top', 'right', 'bottom', 'left'].includes(s))
-      css[`border${s[0]!.toUpperCase()}${s.slice(1)}`] = line;
-  return css as CSSProperties;
-}
-
-// ---- the card's own pictures ----------------------------------------------------------------------
-
-/** How a card picture fills its box, as its JSON says (`fit`, `alignH`, `alignV`); none sent, none set. */
-function pictureFitCss(p: PictureFit | null | undefined): CSSProperties {
-  if (!p) return {};
-  const fit = p.fit === 'cover' || p.fit === 'contain' || p.fit === 'fill' ? p.fit : undefined;
-  const at = p.alignH || p.alignV ? `${p.alignH ?? 'center'} ${p.alignV ?? 'center'}` : undefined;
-  return { objectFit: fit, objectPosition: at };
-}
-
-// ---- a dropped component (an auto layout) ---------------------------------------------------------
-
-function sizeLimits(rules: LayoutRule[] | undefined, fit: number): CSSProperties {
+/** A component's `layoutRules` that only size the component itself (no target) become its limits. */
+function sizeLimits(rules: Rule[], k: number): CSSProperties {
   const css: CSSProperties = {};
-  for (const r of rules ?? []) {
-    if (r.target || (r.attr !== 'width' && r.attr !== 'height')) continue;
-    const v = r.constant * fit;
+  for (const r of rules) {
+    if (r.target || (r.attr !== 'width' && r.attr !== 'height') || r.constant === null) continue;
+    const v = r.constant * k;
     const w = r.attr === 'width';
     if (r.relation === 'eq') css[w ? 'width' : 'height'] = v;
     else if (r.relation === 'gte') css[w ? 'minWidth' : 'minHeight'] = v;
@@ -115,159 +96,161 @@ function sizeLimits(rules: LayoutRule[] | undefined, fit: number): CSSProperties
   return css;
 }
 
-function CompositeView({
+function ComponentView({
   comp,
   ctx,
   hasFrameWidth,
 }: {
-  comp: CompositeComponent;
+  comp: Component;
   ctx: PartCtx;
   hasFrameWidth: boolean;
 }) {
-  const al: AutoLayout = comp.autoLayout;
-  const u = (comp.elements[0]?.scale ?? 1) * ctx.fit;
-  const byId = new Map(comp.elements.map((e) => [e.id, e]));
-  const pad = al.padding;
-  // The layout's lengths, final when the server sends them, else the design's times the scale.
-  const fx = al.px;
-  const f = (final: number | undefined, design: number): number =>
-    final !== undefined ? final * ctx.fit : design * u;
+  const al = comp.autoLayout;
+  const k = ctx.fit;
+  const byId = new Map(comp.atoms.map((a) => [a.id, a]));
+  const row = (dir: string | null) => (dir === 'vertical' ? 'column' : 'row');
   const css: CSSProperties = {
     display: 'flex',
-    flexDirection: al.direction === 'vertical' ? 'column' : 'row',
+    flexDirection: row(al.direction),
     justifyContent: flexOf(al.mainAxis),
     alignItems: flexOf(al.crossAxis),
-    gap: f(fx?.gap, al.gap),
+    columnGap: al.direction === 'vertical' ? undefined : (al.gap ?? 0) * k,
+    rowGap: al.direction === 'vertical' ? (al.gap ?? 0) * k : (al.rowGap ?? al.gap ?? 0) * k,
     flexWrap: al.wrap ? 'wrap' : 'nowrap',
-    padding: `${f(fx?.padding?.top, pad.top ?? pad.y)}px ${f(fx?.padding?.right, pad.right ?? pad.x)}px ${f(fx?.padding?.bottom, pad.bottom ?? pad.y)}px ${f(fx?.padding?.left, pad.left ?? pad.x)}px`,
+    boxSizing: 'border-box',
+    ...paddingCss(al.padding, k),
     ...(hasFrameWidth || al.width.mode === 'fill'
       ? { width: '100%' }
-      : al.width.mode === 'fixed' && al.width.px !== undefined
-        ? { width: f(fx?.width, al.width.px) }
+      : al.width.mode === 'fixed' && al.width.value !== null
+        ? { width: al.width.value * k }
         : {}),
-    ...(al.height.mode === 'fixed' && al.height.px !== undefined
-      ? { height: f(fx?.height, al.height.px) }
-      : {}),
-    ...sizeLimits(comp.layoutRules, ctx.fit),
+    ...(al.height.mode === 'fixed' && al.height.value !== null ? { height: al.height.value * k } : {}),
+    ...sizeLimits(comp.layoutRules, k),
   };
-  const place = (el: CardElement | undefined) =>
-    el ? <ElementView key={el.id} el={el} ctx={ctx} inFrame={false} /> : null;
-  return (
-    <div style={css}>
-      {al.items.map((it) =>
-        it.type === 'element' ? (
-          place(byId.get(it.id))
-        ) : (
+  // A hidden atom (a badge the title lacks, empty text) takes no room: the rest close up.
+  const draw = (items: LayoutItem[]) =>
+    items.map((it, i) => {
+      if (it.type === 'group') {
+        return (
           <div
-            key={it.id}
-            style={{
-              display: 'flex',
-              flexDirection: it.direction === 'vertical' ? 'column' : 'row',
-              gap: it.gap * u,
-            }}
+            key={it.id ?? `g${i}`}
+            style={{ display: 'flex', flexDirection: row(it.direction), gap: (it.gap ?? 0) * k }}
           >
-            {it.elementIds.map((id) => place(byId.get(id)))}
+            {draw(it.items)}
           </div>
-        ),
-      )}
-    </div>
-  );
+        );
+      }
+      const atom = it.id ? byId.get(it.id) : undefined;
+      if (!atom || !isDrawn(atom, ctx.title)) return null;
+      return <AtomView key={atom.id} atom={atom} ctx={ctx} inFrame={false} />;
+    });
+  return <div style={css}>{draw(al.items)}</div>;
 }
 
-// ---- the card ------------------------------------------------------------------------------------------
+// ---- the card ------------------------------------------------------------------------------------
 
 /**
- * The card's box: its width and height are the rail's (it never shrinks in a row), its parts are
- * placed inside it, and its focus look is `presentation.focus` (none sent, none drawn).
+ * The card's box: its width and height are the rail's, its parts are placed inside it, and its TV
+ * focus look is `card.focus` (null: none).
  */
-const Root = styled.div<{ $radius: string; $focus: Presentation['focus'] }>`
+const Root = styled.div<{ $radius: string; $focus: Card['focus']; $k: number }>`
   position: relative;
   flex: none;
-  /* The rank numeral sits behind the card (z-index -1): keep it inside this card, above the page. */
+  /* The rank numeral may sit behind the card (z-index -1): keep it inside this card, above the page. */
   isolation: isolate;
   border-radius: ${(p) => p.$radius};
-  ${(p) =>
-    p.$focus
-      ? `transition: transform ${p.$focus.durationMs}ms;
+  ${(p) => {
+    const f = p.$focus;
+    if (!f) return '';
+    const ring =
+      f.border?.width && f.border.color ? `0 0 0 ${f.border.width * p.$k}px ${rgba(f.border.color)}` : '';
+    const glow = f.glow?.color
+      ? `0 0 ${(f.glow.blur ?? 0) * p.$k}px ${rgba(f.glow.color, f.glow.opacity ?? 1)}`
+      : '';
+    return `transition: transform ${f.durationMs ?? 0}ms;
   &:focus-visible {
     outline: none;
-    transform: scale(${p.$focus.scale});
-    box-shadow: ${[
-      p.$focus.border ? `0 0 0 ${p.$focus.border.widthPx}px ${p.$focus.border.color}` : '',
-      p.$focus.glow
-        ? `0 0 ${p.$focus.glow.blurPx}px ${withAlpha(p.$focus.glow.color, p.$focus.glow.opacity)}`
-        : '',
-    ]
-      .filter(Boolean)
-      .join(', ')};
-  }`
-      : ''}
+    z-index: 1;
+    transform: scale(${f.scale ?? 1});
+    box-shadow: ${[ring, glow].filter(Boolean).join(', ') || 'none'};
+  }`;
+  }}
 `;
 
 export interface CardViewProps {
-  design: CardDesign;
+  block: Block;
   /** The title the card shows; null draws the empty card (a title still on its way). */
-  item: TitleItem | null;
+  title: Title | null;
   width: number;
   height: number;
-  /** The rank numeral of a "top 10" card: this card's place in its rail, from 1. */
+  /** The rank numeral of a Top 10 card: this card's place in its rail, from 1. */
   rank?: number;
-  onOpen?: (item: TitleItem) => void;
-  onAction?: (action: string, item: TitleItem | null) => void;
+  onOpen?: (title: Title) => void;
+  onAction?: (action: string, title: Title | null) => void;
   /** Paints the card ahead of the page (a hero is drawn the moment it is on screen). */
   priority?: boolean;
+  /** A rail's header or footer: drawn with no title. */
+  standalone?: boolean;
 }
 
 interface Placed {
   id: string;
   frame: Frame;
-  z: number | undefined;
-  el?: CardElement;
-  comp?: CompositeComponent;
+  z: number | null;
+  atom?: Atom;
+  comp?: Component;
 }
 
 export function CardView({
-  design,
-  item,
+  block,
+  title,
   width: W,
   height: H,
   rank,
   onOpen,
   onAction,
   priority,
+  standalone,
 }: CardViewProps) {
-  const pres = design.presentation;
-  const fit = fitOf({ width: W, height: H }, pres.contentFit);
-  const ctx: PartCtx = { item, fit, aspect: pres.contentImageAspect, onAction };
-  // The designed card size at the size it is drawn: what a fixed or minimum box is a fraction of.
-  const designed = { w: pres.contentFit.designedWidthPx * fit, h: pres.contentFit.designedHeightPx * fit };
+  const card = block.card;
+  const fit = fitOf({ width: W, height: H }, card);
+  const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction };
+  // The designed card at the size it is drawn: what a fixed or minimum box is a fraction of.
+  const designed = { w: (card.width ?? W) * fit, h: (card.height ?? H) * fit };
   const rootRef = useRef<HTMLDivElement>(null);
+  const showParts = Boolean(title) || Boolean(standalone);
 
-  // What sits on the card, each with the frame the server worked out for it.
+  // What sits on the card for this title, each with its frame. An atom the title does not show takes
+  // no place; a component with nothing left to show is not drawn.
   const placed = useMemo<Placed[]>(() => {
     const out: Placed[] = [];
-    for (const el of design.elements) {
-      if (el.hidden || !el.frame) continue;
-      out.push({ id: el.id, frame: el.frame, z: el.zIndex, el });
+    for (const atom of block.atoms) {
+      if (!atom.frame || !isDrawn(atom, title)) continue;
+      out.push({ id: atom.id, frame: atom.frame, z: atom.zIndex, atom });
     }
-    for (const comp of design.compositeComponents) {
+    for (const comp of block.components) {
       if (comp.slot !== 'card' || !comp.frame) continue;
+      const ids = new Set(listed(comp.autoLayout.items));
+      if (!comp.atoms.some((a) => ids.has(a.id) && isDrawn(a, title))) continue;
       out.push({ id: comp.id, frame: comp.frame, z: comp.zIndex, comp });
     }
     return out;
-  }, [design]);
+  }, [block, title]);
 
-  // ---- layout rules: measure what each part naturally is, solve, place --------------------------------
-  const rules = useMemo<LayoutRule[]>(
-    () => (design.layoutRules ?? []).map((r) => ({ ...r, constant: r.constant * fit })),
-    [design.layoutRules, fit],
-  );
-  // What the rules worked out, with each part's natural size it was worked out from; null = measure again.
+  // ---- layout rules: measure each part's natural size, solve, place ------------------------------
+  // A rule whose item or target is not drawn for this title is left out: that part keeps its frame.
+  const rules = useMemo<LayoutRule[]>(() => {
+    const ids = new Set(placed.map((p) => p.id));
+    return block.layoutRules
+      .filter((r) => r.item && ids.has(r.item) && (!r.target || r.target === 'parent' || ids.has(r.target)))
+      .map((r) => toLayoutRule(r, fit))
+      .filter((r): r is LayoutRule => r !== null);
+  }, [block.layoutRules, placed, fit]);
   const [solved, setSolved] = useState<{
     boxes: Record<string, Box>;
     naturals: Record<string, { w: number; h: number }>;
   } | null>(null);
-  const ruleKey = `${design.id}|${W}|${H}|${fit}|${item?.id ?? ''}|${rules.length}`;
+  const ruleKey = `${block.id}|${W}|${H}|${fit}|${title?.id ?? ''}|${rules.length}`;
   const lastKey = useRef(ruleKey);
 
   useLayoutEffect(() => {
@@ -284,7 +267,7 @@ export function CardView({
       const w = node.offsetWidth;
       const h = node.offsetHeight;
       naturals[p.id] = { w, h };
-      const o = naturalOrigin(p.frame, W, H, w, h);
+      const o = originOf(p.frame, W, H, w, h);
       return [{ id: p.id, width: w, height: h, x: o.x, y: o.y }];
     });
     setSolved({ boxes: resolveLayout({ parent: { width: W, height: H }, items, rules }).boxes, naturals });
@@ -298,17 +281,17 @@ export function CardView({
     return () => {
       live = false;
     };
-  }, [rules.length, design.id]);
+  }, [rules.length, block.id]);
 
-  // A frame with a size (`sizing` fixed, min or fill) is the part's own size: the part fills it.
+  // A frame with a size (`fixed`, `min`, `fill`) is the part's own size: the part fills it.
   const sized = (f: Frame): boolean => f.w !== null || f.h !== null;
 
   const placement = (p: Placed): CSSProperties => {
-    const box = solved?.boxes[p.id];
     const css: CSSProperties = {
       ...frameCss(p.frame, W, H, designed),
       ...(sized(p.frame) ? { display: 'flex' } : {}),
     };
+    const box = solved?.boxes[p.id];
     if (!box) return css;
     // A rule moved or resized it: keep every size the frame gave it, replace where it sits.
     const nat = solved?.naturals[p.id];
@@ -324,53 +307,55 @@ export function CardView({
     return out;
   };
 
-  // ---- the layers of `presentation.stack` ------------------------------------------------------------------
-  const z = (layer: string): number | undefined => pres.stack.find((s) => s.layer === layer)?.zIndex;
-  const r = pres.cornerRadiiFrac;
-  const radius = `${r.topLeft * W}px ${r.topRight * W}px ${r.bottomRight * W}px ${r.bottomLeft * W}px`;
-  const bgSrc = pres.backgroundImage
-    ? pres.backgroundImage.source === 'content'
-      ? imageFor(item, pres.contentImageAspect)
-      : pres.backgroundImage.url
-    : null;
-  const inset = pres.insetImage;
-  const insetSrc = inset
-    ? inset.source === 'content'
-      ? imageFor(item, pres.contentImageAspect)
-      : inset.url
-    : null;
-  const shade = pres.shadeGradient ?? pres.gradient?.css ?? null;
-  const shadows = (pres.shadows ?? []).map(
-    (s) =>
-      `${s.kind === 'inner' ? 'inset ' : ''}${s.xPx}px ${s.yPx}px ${s.blurPx}px ${s.spreadPx}px ${withAlpha(s.color, s.opacity / 100)}`,
-  );
-  const style = design.style as Record<string, string | boolean | undefined> | undefined;
-  const rankStyle = style?.indexNumber && rank !== undefined ? rankNumeralCss(style) : null;
-  const behind = style?.indexNumberLayer === 'back';
-  const numeral = rankStyle && (
-    <div aria-hidden style={{ position: 'absolute', zIndex: behind ? -1 : undefined, ...rankStyle }}>
+  // ---- the layers of `card.stack` -------------------------------------------------------------------
+  const z = (layer: string): number | undefined => card.stack.find((s) => s.layer === layer)?.zIndex;
+  const c = card.cornerRadiusFrac;
+  const radius = `${(c.topLeft ?? 0) * W}px ${(c.topRight ?? 0) * W}px ${(c.bottomRight ?? 0) * W}px ${(c.bottomLeft ?? 0) * W}px`;
+  const bg = card.background;
+  const bgImage = bg?.type === 'image' && bg.image ? imageSrc(bg.image, title, card.imageAspect) : null;
+  const inset = card.insetImage;
+  const insetSrc = inset ? imageSrc(inset, title, card.imageAspect) : null;
+  const layer = (name: string, extra: CSSProperties = {}): CSSProperties => ({
+    position: 'absolute',
+    inset: 0,
+    zIndex: z(name),
+    pointerEvents: 'none',
+    ...extra,
+  });
+
+  const numeral = block.rank && rank !== undefined && (
+    <div
+      aria-hidden
+      style={{
+        position: 'absolute',
+        zIndex: block.rank.layer === 'back' ? -1 : undefined,
+        ...rankCss(block.rank),
+      }}
+    >
       {rank}
     </div>
   );
+  const behind = block.rank?.layer === 'back';
 
-  const open = () => item && onOpen?.(item);
+  const open = () => title && onOpen?.(title);
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       open();
     }
   };
-  const interactive = Boolean(onOpen && item);
+  const interactive = Boolean(onOpen && title);
 
   return (
     <Root
       ref={rootRef}
       $radius={radius}
-      $focus={pres.focus}
+      $focus={card.focus}
+      $k={fit}
       style={{ width: W, height: H }}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
-      aria-label={item?.title}
+      aria-label={title?.title ?? undefined}
       onClick={interactive ? open : undefined}
       onKeyDown={interactive ? onKey : undefined}
     >
@@ -381,35 +366,30 @@ export function CardView({
           inset: 0,
           overflow: 'hidden',
           borderRadius: radius,
-          boxShadow: shadows.length ? shadows.join(', ') : undefined,
-          clipPath: pres.clipPath ?? undefined,
+          boxShadow: boxShadowCss(card.shadows, fit),
+          clipPath: polygonCss(card.shapePolygon),
         }}
       >
-        {pres.backgroundGradient && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: z('background'),
-              background: pres.backgroundGradient.css,
-            }}
-          />
-        )}
-        {bgSrc && (
-          <img
-            src={bgSrc}
-            alt=""
-            draggable={false}
-            loading={priority ? 'eager' : 'lazy'}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              ...pictureFitCss(pres.backgroundImage),
-              zIndex: z('background'),
-            }}
-          />
+        {/* background: a colour or gradient; a picture over `fallbackColor`, under black at `scrim` */}
+        {bg && bg.type !== 'image' && <div style={layer('background', fillCss(bg))} />}
+        {bg?.type === 'image' && (
+          <>
+            {bg.fallbackColor && (
+              <div style={layer('background', { backgroundColor: rgba(bg.fallbackColor) })} />
+            )}
+            {bgImage && (
+              <img
+                src={bgImage}
+                alt=""
+                draggable={false}
+                loading={priority ? 'eager' : 'lazy'}
+                style={{ ...layer('background'), width: '100%', height: '100%', ...objectFitCss(bg.image) }}
+              />
+            )}
+            {bg.scrim ? (
+              <div style={layer('background', { backgroundColor: `rgba(0,0,0,${bg.scrim})` })} />
+            ) : null}
+          </>
         )}
         {inset && insetSrc && (
           <img
@@ -419,51 +399,34 @@ export function CardView({
             loading={priority ? 'eager' : 'lazy'}
             style={{
               position: 'absolute',
-              left: inset.leftPx,
-              top: inset.topPx,
-              width: inset.widthPx,
-              height: inset.heightPx,
-              ...pictureFitCss(inset),
-              clipPath: inset.clipPath ?? undefined,
+              left: (inset.left ?? 0) * fit,
+              top: (inset.top ?? 0) * fit,
+              width: inset.width !== null ? inset.width * fit : undefined,
+              height: inset.height !== null ? inset.height * fit : undefined,
+              ...objectFitCss(inset),
+              clipPath: polygonCss(inset.shapePolygon),
               zIndex: z('insetImage'),
             }}
           />
         )}
-        {shade && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: z('shade'),
-              background: shade,
-              pointerEvents: 'none',
-            }}
-          />
+        {card.shade.map((g, i) => (
+          <div key={i} style={layer('shade', { backgroundImage: gradientCss(g) })} />
+        ))}
+        {card.border && (
+          <div style={layer('outline', { borderRadius: radius, ...strokeCss(card.border, fit) })} />
         )}
-        {pres.border && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: z('outline'),
-              pointerEvents: 'none',
-              borderRadius: radius,
-              ...borderCss(pres.border),
-            }}
-          />
-        )}
-        {item &&
+        {showParts &&
           placed.map((p) => (
-            <div key={p.id} data-item-id={p.id} style={{ ...placement(p), zIndex: p.z }}>
-              {p.el ? (
-                <ElementView
-                  el={p.el}
+            <div key={p.id} data-item-id={p.id} style={{ ...placement(p), zIndex: p.z ?? undefined }}>
+              {p.atom ? (
+                <AtomView
+                  atom={p.atom}
                   ctx={ctx}
                   inFrame
                   style={sized(p.frame) ? { flex: '1 1 auto' } : undefined}
                 />
               ) : (
-                <CompositeView comp={p.comp!} ctx={ctx} hasFrameWidth={p.frame.w !== null} />
+                <ComponentView comp={p.comp!} ctx={ctx} hasFrameWidth={p.frame.w !== null} />
               )}
             </div>
           ))}
@@ -474,23 +437,21 @@ export function CardView({
 }
 
 /**
- * The rank numeral as the card's `style` says: its colour and how it is painted (solid, outline,
- * gradient). The JSON sends no size, font, place or stroke width for it, so none is set here.
+ * The rank numeral as `block.rank` says: its colour, painted solid, as an outline, or with its
+ * gradient. The JSON sends no size, font or place for it, so none is set here.
  */
-function rankNumeralCss(style: Record<string, string | boolean | undefined>): CSSProperties {
-  const color = typeof style.indexNumberColor === 'string' ? style.indexNumberColor : undefined;
-  switch (style.indexNumberStyle) {
-    case 'outline':
-      return { color: 'transparent', WebkitTextStrokeColor: color } as CSSProperties;
-    case 'gradient':
-      return {
-        backgroundImage: `linear-gradient(180deg, ${style.indexNumberGradientFrom}, ${style.indexNumberGradientTo})`,
-        WebkitBackgroundClip: 'text',
-        backgroundClip: 'text',
-        color: 'transparent',
-        WebkitTextFillColor: 'transparent',
-      } as CSSProperties;
-    default:
-      return { color };
+function rankCss(rank: NonNullable<Block['rank']>): CSSProperties {
+  const color = rgba(rank.color);
+  if (rank.style === 'outline')
+    return { color: 'transparent', WebkitTextStrokeColor: color } as CSSProperties;
+  if (rank.style === 'gradient' && rank.gradient) {
+    return {
+      backgroundImage: gradientCss(rank.gradient),
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      color: 'transparent',
+      WebkitTextFillColor: 'transparent',
+    } as CSSProperties;
   }
+  return { color };
 }

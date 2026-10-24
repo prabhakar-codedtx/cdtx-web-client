@@ -2,7 +2,7 @@ import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { getPage, getRailItems } from '@/lib/api/endpoints';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { ApiError } from '@/lib/api/client';
-import type { DeliveryPage, TitleItem } from '@/lib/api/types';
+import type { Page, Title } from '@/lib/api/types';
 import type { RootState } from '@/app/store';
 
 export interface PageRequest {
@@ -23,8 +23,8 @@ interface Entry<T> {
 }
 
 interface PagesState {
-  pages: Record<string, Entry<DeliveryPage>>;
-  items: Record<string, Entry<TitleItem[]>>;
+  pages: Record<string, Entry<Page>>;
+  items: Record<string, Entry<Title[]>>;
 }
 
 const failure = (e: unknown): { error: string; code: number | null } => ({
@@ -34,7 +34,7 @@ const failure = (e: unknown): { error: string; code: number | null } => ({
 
 /** A screen. Asked again each time it is opened: a publish must reach the next visit. */
 export const loadPage = createAsyncThunk<
-  { key: string; page: DeliveryPage },
+  { key: string; page: Page },
   PageRequest,
   { rejectValue: { error: string; code: number | null } }
 >(
@@ -61,7 +61,7 @@ export const loadPage = createAsyncThunk<
   },
 );
 
-/** A rail's titles, by the rail's own `content_url` (complete as the server sent it). */
+/** A rail's titles, by the rail's own `source.contentUrl` (complete as the server sent it). */
 export const loadItems = createAsyncThunk(
   'pages/items',
   async (contentUrl: string) => ({ contentUrl, items: await getRailItems(contentUrl) }),

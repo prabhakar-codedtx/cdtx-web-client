@@ -1,43 +1,61 @@
-import type { DeliveryPage } from '@/lib/api/types';
-import { backgroundCss } from '@/lib/render/background';
-import { useFonts } from '@/lib/useFonts';
+import { useEffect, useState } from 'react';
+import { useAppSelector } from '@/app/hooks';
+import { getPage } from '@/lib/api/endpoints';
+import type { Block, Page } from '@/lib/api/types';
+import { getDeliveryContext } from '@/lib/device/deviceContext';
+import { useInView } from '@/lib/device/useInView';
+import { fillCss, paddingCss } from '@/lib/render/paint';
 import { HeroBanner } from '@/screens/HeroBanner';
 import { Rail } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
 
 /**
- * One screen from its page JSON: the hero first, then the rails in order, spaced and padded as
- * `spacing` says, on the page's own background and in its own fonts.
+ * One screen from its page JSON (`RENDERING-GUIDE.md` 3): the page's `background`, then `rails` in
+ * order, the hero first (`layout: hero`), the rows `spacing.railGap` apart and `spacing.railPadding`
+ * around each. A rail with `source.count` 0 has nothing to show and is skipped. More rows
+ * (`paging.nextStart`) are asked for when the user nears the bottom.
  */
-export function PageScreen({ page }: { page: DeliveryPage }) {
-  useFonts(page);
-  const { open, act } = useTitleActions();
+export function PageScreen({ page, contentId }: { page: Page; contentId?: string }) {
+  const { open, act, seeAll } = useTitleActions();
+  const launch = useAppSelector((s) => s.launch.launch);
+  // The windows of rows asked for after the first: their rails and their card designs.
+  const [more, setMore] = useState<Page[]>([]);
+  const [endRef, nearEnd] = useInView<HTMLDivElement>();
+  const last = more[more.length - 1] ?? page;
+  const nextStart = last.paging.nextStart;
+
+  useEffect(() => {
+    if (!nearEnd || nextStart === null || !launch || !page.slug) return;
+    let live = true;
+    void getPage(launch, page.slug, getDeliveryContext(), { contentId, start: nextStart }).then(
+      (p) => {
+        if (live) setMore((m) => [...m, p]);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [nearEnd, nextStart, launch, page.slug, contentId]);
+
+  const blocks: Record<string, Block> = Object.assign({}, page.blocks, ...more.map((p) => p.blocks));
+  const rails = [...page.rails, ...more.flatMap((p) => p.rails)].filter((r) => r.source.count !== 0);
   const sp = page.spacing;
-  const pad = sp.railPaddingPx;
+
   return (
-    <main
-      style={{
-        backgroundColor: page.background ?? undefined,
-        ...backgroundCss(page.page_background),
-        fontFamily: page.typography.default,
-      }}
-    >
-      {page.hero && <HeroBanner rail={page.hero} onOpen={open} onAction={act} />}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: sp.railGapPx,
-          paddingTop: sp.railPaddingTopPx ?? pad,
-          paddingRight: sp.railPaddingRightPx ?? pad,
-          paddingBottom: sp.railPaddingBottomPx ?? pad,
-          paddingLeft: sp.railPaddingLeftPx ?? pad,
-        }}
-      >
-        {page.rails.map((rail) => (
-          <Rail key={rail.key} rail={rail} onOpen={open} onAction={act} />
-        ))}
+    <main style={fillCss(page.background)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: sp.railGap ?? 0 }}>
+        {rails.map((rail) =>
+          rail.layout === 'hero' ? (
+            <HeroBanner key={rail.key} rail={rail} blocks={blocks} onOpen={open} onAction={act} />
+          ) : (
+            <div key={rail.key} style={paddingCss(sp.railPadding)}>
+              <Rail rail={rail} blocks={blocks} onOpen={open} onAction={act} onSeeAll={seeAll} />
+            </div>
+          ),
+        )}
       </div>
+      {nextStart !== null && <div ref={endRef} aria-hidden style={{ height: 1 }} />}
     </main>
   );
 }

@@ -3,6 +3,7 @@ import { Provider } from 'react-redux';
 import { store } from '@/app/store';
 import { Shell } from '@/screens/Shell';
 import { DetailRoute, TabRoute } from '@/screens/Routes';
+import { PlayerScreen } from '@/player/PlayerScreen';
 
 export function App() {
   return (
@@ -13,6 +14,7 @@ export function App() {
             <Route index element={<TabRoute />} />
             <Route path="p/:slug" element={<TabRoute />} />
             <Route path="title/:type/:id" element={<DetailRoute />} />
+            <Route path="play/:type/:id" element={<PlayerScreen />} />
             <Route path="*" element={<TabRoute />} />
           </Route>
         </Routes>

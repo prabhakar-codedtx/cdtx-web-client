@@ -1,27 +1,33 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import { getLaunch, getTabs, type Launch } from '@/lib/api/endpoints';
+import { getDesignSystem, getLaunch, getTabs, type Launch } from '@/lib/api/endpoints';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
-import type { TabSummary } from '@/lib/api/types';
+import type { NavPage, Theme } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
 
 interface LaunchState {
   status: 'idle' | 'loading' | 'ready' | 'failed';
   error: string | null;
   launch: Launch | null;
-  tabs: TabSummary[];
-  /** The device the tabs were asked for; a window that crosses into or out of a phone's width asks again. */
+  /** The Design System: the fonts to load and the default font. */
+  theme: Theme | null;
+  tabs: NavPage[];
+  /** The device the launch config and tabs were asked for; another device asks again. */
   dt: string | null;
 }
 
-const initial: LaunchState = { status: 'idle', error: null, launch: null, tabs: [], dt: null };
+const initial: LaunchState = { status: 'idle', error: null, launch: null, theme: null, tabs: [], dt: null };
 
-/** Start: the launch config (the one address the client knows), then the tabs it points at. */
+/** Start: the launch config (the one address the client knows), the Design System, then the tabs. */
 export const boot = createAsyncThunk('launch/boot', async (_: void, { getState }) => {
   const ctx = getDeliveryContext();
-  const known = (getState() as { launch: LaunchState }).launch.launch;
-  const launch = known ?? (await getLaunch(ctx));
-  const tabs = await getTabs(launch, ctx);
-  return { launch, tabs, dt: ctx.dt };
+  const state = (getState() as { launch: LaunchState }).launch;
+  const launch = state.launch && state.dt === ctx.dt ? state.launch : await getLaunch(ctx);
+  const [theme, tabs] = await Promise.all([
+    // A Design System that cannot be read leaves the page drawn without its fonts, not blank.
+    getDesignSystem(launch, ctx).catch(() => null),
+    getTabs(launch, ctx),
+  ]);
+  return { launch, theme, tabs, dt: ctx.dt };
 });
 
 const slice = createSlice({
@@ -36,6 +42,7 @@ const slice = createSlice({
     b.addCase(boot.fulfilled, (s, a) => {
       s.status = 'ready';
       s.launch = a.payload.launch;
+      s.theme = a.payload.theme;
       s.tabs = a.payload.tabs;
       s.dt = a.payload.dt;
     });

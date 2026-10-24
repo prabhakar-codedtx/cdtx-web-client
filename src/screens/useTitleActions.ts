@@ -1,46 +1,74 @@
 import { useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '@/app/hooks';
 import { showToast } from '@/app/uiSlice';
 import { DETAIL_PAGES } from '@/lib/config';
-import type { PageRail, TitleItem } from '@/lib/api/types';
+import type { Rail, Title } from '@/lib/api/types';
 
 /**
- * What a tap does. The JSON says which tap (`tap.card.type` on the rail, `action` on a part); the
- * client carries out the ones it can: opening a title's detail page. Playback is not part of the
- * delivery API (no stream address), so Play opens the title and the rest say so.
+ * What a tap does. The JSON says which tap: a card uses `rail.tap.cards[title.id]`, else
+ * `rail.tap.card` (`detail`, `player`, `collection`, `link`, `none`); an atom its `action`. The client
+ * carries out the ones it can: the detail page, the player (`/play/:type/:id`), or a link. The
+ * delivery API has no stream address yet, so the player plays the title's `previewVideoUrl`.
  */
 export function useTitleActions() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { pathname } = useLocation();
 
-  const open = useCallback(
-    (item: TitleItem, rail?: PageRail) => {
-      if (rail?.tap.card?.type === 'none') return;
-      if (!DETAIL_PAGES[item.content_type]) {
-        dispatch(showToast(`There is no detail page for ${item.content_type} yet.`));
+  const detail = useCallback(
+    (title: Title) => {
+      const type = title.type ?? '';
+      if (!DETAIL_PAGES[type]) {
+        dispatch(showToast(`There is no detail page for ${type || 'this title'} yet.`));
         return;
       }
-      navigate(`/title/${item.content_type}/${item.id}`);
+      navigate(`/title/${type}/${title.id}`);
     },
     [navigate, dispatch],
   );
 
   const act = useCallback(
-    (action: string, item: TitleItem | null) => {
-      if (!item) return;
+    (action: string, title: Title | null) => {
+      if (!title) return;
       if (action === 'play') {
-        // On the title's own page there is nothing more to open.
-        if (pathname.endsWith(`/${item.id}`))
-          dispatch(showToast('Playback is not connected to this client yet.'));
-        else open(item);
+        // The player, laid out by the product's player config; the title goes along for its name and picture.
+        navigate(`/play/${title.type ?? 'title'}/${title.id}`, { state: { title } });
+        return;
+      }
+      if (action === 'more_info' || action === 'detail') {
+        detail(title);
         return;
       }
       dispatch(showToast(`"${action}" is not available yet.`));
     },
-    [pathname, open, dispatch],
+    [navigate, detail, dispatch],
   );
 
-  return { open, act };
+  const open = useCallback(
+    (title: Title, rail?: Rail) => {
+      const tap = rail ? (rail.tap.cards[title.id] ?? rail.tap.card) : null;
+      switch (tap?.type ?? 'detail') {
+        case 'none':
+          return;
+        case 'player':
+          act('play', title);
+          return;
+        case 'link':
+          if (tap?.target) window.open(tap.target, '_blank', 'noopener');
+          return;
+        case 'collection':
+          dispatch(showToast('Opening a full list is not available yet.'));
+          return;
+        default:
+          detail(title);
+      }
+    },
+    [act, detail, dispatch],
+  );
+
+  const seeAll = useCallback(() => {
+    dispatch(showToast('Opening a full list is not available yet.'));
+  }, [dispatch]);
+
+  return { open, act, seeAll };
 }

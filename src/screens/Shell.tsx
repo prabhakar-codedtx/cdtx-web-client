@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { boot } from '@/app/launchSlice';
 import { clearToast } from '@/app/uiSlice';
 import { useDt } from '@/lib/device/useDt';
+import { useFonts } from '@/lib/useFonts';
 import { TopNav } from '@/screens/TopNav';
 
 /**
@@ -14,13 +15,20 @@ export function Shell() {
   const dispatch = useAppDispatch();
   const dt = useDt();
   const { pathname } = useLocation();
-  const { status, error, launch } = useAppSelector((s) => s.launch);
+  const { status, error, launch, theme } = useAppSelector((s) => s.launch);
   const toast = useAppSelector((s) => s.ui.toast);
 
   // Start, and ask again for the tabs when the window changes into or out of a phone's width.
   useEffect(() => {
     void dispatch(boot());
   }, [dispatch, dt]);
+
+  useFonts(theme);
+
+  // Text whose `fontFamily` is null is drawn in the Design System's default font.
+  useEffect(() => {
+    document.body.style.fontFamily = theme?.defaultFontFamily ?? '';
+  }, [theme]);
 
   // A new screen starts at the top.
   useEffect(() => {
@@ -38,7 +46,9 @@ export function Shell() {
       <div role="alert">
         <strong>The storefront could not be loaded.</strong>
         <span>{error}</span>
-        <button type="button" onClick={() => void dispatch(boot())}>Try again</button>
+        <button type="button" onClick={() => void dispatch(boot())}>
+          Try again
+        </button>
       </div>
     );
   }

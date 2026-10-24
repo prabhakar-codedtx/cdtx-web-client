@@ -18,24 +18,58 @@ Settings (`.env`, see `.env.example`): `VITE_PRODUCT` (the product key), `VITE_D
 
 ## How it works
 
-1. `GET /v1/launch/config` is the only address built in. It returns the addresses of the other calls, and the
-   `forceUpdate` / maintenance flags (`src/lib/api/endpoints.ts`, `src/screens/Shell.tsx`).
-2. The tabs call fills the tab bar (`TopNav`); `/` opens the tab with `is_default`.
-3. A screen is `GET {pageURL}`: `PageScreen` draws the hero, then the rails in order, with the page's `spacing`,
-   `background` and `typography`. A rail's titles come from its own `sources[0].content_url`, asked when the rail nears the
-   screen (`src/screens/Rail.tsx`).
-4. A card (`src/render/CardView.tsx`, `Parts.tsx`) is drawn from its `card_component`: the layers of
-   `presentation.stack`, each part at its `frame`, lengths from the part's final `px` (or, from a server that does not send
-   them yet, the design size times `scale`), times the card's `fit`. `layoutRules` are solved with the shared resolver
-   (`src/lib/layout`, the same cases as `docs/layout-rules/conformance/resolve.json` in the CMS repo).
-5. Tapping a card opens `/title/:type/:id`: the detail page for that kind of title (`VITE_DETAIL_PAGES`), asked with
-   `contentId`. Play opens the title; there is no stream address in the delivery API yet.
+The client reads **schema 3** (the server's default), as described in the CMS repo's `docs/client-contract/`
+(`RENDERING-GUIDE.md`, `KEYS-EXPLAINED.md`, `SCHEMA-3-KEYS.md`). Types: `src/lib/api/types.ts`.
+
+1. `GET /v1/launch/config?product_id=&device=&reg=` is the only address built in. It returns the addresses of the other
+   calls and the `forceUpdate` / maintenance flags (`src/lib/api/endpoints.ts`, `src/screens/Shell.tsx`).
+2. `GET {designSystemURL}`: the fonts to load and `defaultFontFamily` (for text whose `fontFamily` is null). Kept in
+   `localStorage` by its address, whose `v` changes only when the Design System does.
+3. The tabs call fills the tab bar (`TopNav`); `/` opens the tab with `isDefault`.
+4. A screen is `GET {pageURL}`: `PageScreen` paints `background` (a `Fill`), then draws `rails` in order, the hero first
+   (`layout: hero`, `HeroBanner`), the rows `spacing.railGap` apart with `spacing.railPadding` around each. A rail with
+   `source.count` 0 is skipped and its URL never called. More rows (`paging.nextStart`) load near the bottom.
+5. A rail (`src/screens/Rail.tsx`) draws `blocks[rail.blockKey]` once per title, its titles from `source.contentUrl` (as
+   sent, when the rail nears the screen), its card size from `railLayout` (`designed`, `exact` / `tier`, `count`, and
+   `banner`: every card fits across, no scrolling), plus `titleStyle`, `seeAll`, `grid.maxRows`, header / footer blocks.
+6. A card (`src/render/CardView.tsx`, `Parts.tsx`): the layers of `card.stack` (background `Fill`, inset image, `shade`
+   gradients, `border`), each atom at its `frame`, components by their `autoLayout`, every length times the card's `fit`.
+   An atom is drawn only if `showWhen` is null or the title has that badge; hidden atoms take no room.
+   `layoutRules` are solved with the shared resolver (`src/lib/layout`).
+7. A tap uses `rail.tap.cards[title.id]`, else `rail.tap.card`; `detail` opens `/title/:type/:id` (the detail page for
+   that kind of title, `VITE_DETAIL_PAGES`, asked with `contentId`). An atom's `action` (play, more_info) acts on its title.
+   There is no stream address in the delivery API yet.
 
 The device it asks as (`dt`) is `web`, `mobileweb` in a window under 768 px, `androidtv` in an Android TV browser.
+
+## The player (`/play/:type/:id`)
+
+Play (an atom's `play` action, or a rail whose `tap.card.type` is `player`) opens the player. Its controls come from the
+player config, `GET /v1/player-config/{product}?dt=` (the CMS repo's `docs/player-config-client/README.md`), in
+`src/player/`:
+
+- `usePlayerConfig` asks for it when the player opens. The last good copy is kept with its `ETag` (sent back in
+  `If-None-Match`; 304 reuses it; any failure falls back to it). `404` means no player is published: the browser's own
+  player is shown. While that is so, a development build (or `VITE_PLAYER_SAMPLE=on`) shows the backend's sample layout
+  (`src/player/samples`) and says so.
+- `PlayerControls` places every control at its `frame` (fractions of the 16:9 surface, minus `surface.safe`), scales
+  lengths by `width / surface.design.w`, draws its `look` (a schema 3 atom, with the same `AtomView` as the cards) or a
+  plain button when it has none, measures, then solves `ties` and applies `limits`. A control is drawn only when the
+  browser has what it `requires` (fullscreen, pip; no cast) and its `showWhen` holds. `ad.controls` replace the controls
+  while an ad plays. `behaviour`: hide after `autoHideSeconds`, `initialFocus` and arrow keys along `focusOrder` on a
+  remote, `seekStepSeconds`, and hit zones of at least `minTarget`.
+- `Panel` opens Quality, Audio, Subtitles, Audio and subtitles, Speed, Settings and Episodes where
+  `panelContract.placement[panel.opens]` says, fills them from `panel.data` and the stream, starts focus on the selected
+  option, closes on Back, and returns focus to the button. A panel design (`panels`) is used when its atoms carry the
+  contract's roles; otherwise the panel is a plain list.
+- `useMedia` is the `<video>` the controls drive. The delivery API has no stream address yet, so it plays the title's
+  `previewVideoUrl`; without one the title's picture stands in.
 
 ## What is not in the JSON yet (so not in the client)
 
 - Detail pages are not listed anywhere, so the client is told which page opens for which kind of title.
 - Playback, user actions (like, watchlist) and watch progress have no API.
-- A picture part's own size (`px.width` and `px.height`) is only sent once the server version that adds the final sizes is
-  deployed; until then it falls back to the design size.
+- The Top 10 rank numeral (`block.rank`) has a colour and a style but no size, stroke width or place.
+- Player: the launch config has no `playerConfigURL` (the client uses the guide's address); no stream address, intro
+  markers, next episode or season's episodes reach the client, so Skip Intro, Next episode and Episodes stay hidden; the
+  delivered panel designs carry no roles or `repeat` marks, so panels are drawn as plain lists.
