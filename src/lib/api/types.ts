@@ -505,7 +505,19 @@ export interface Rail {
   tap: { card: TapAction; cards: Record<string, TapAction>; elements: Record<string, string> };
   railLayout: RailLayout;
   /** `tap`: where it goes: `collection` (or none sent) the rail's own titles, `link` its `target`, `none` nowhere. */
-  seeAll: { show: boolean; label: string | null; tap?: TapAction };
+  seeAll: {
+    show: boolean;
+    label: string | null;
+    tap?: TapAction;
+    /** How it is drawn when no header design draws it: a `text` link (label, arrow), a `button`, or just an `arrow`. */
+    style?: 'text' | 'button' | 'arrow' | null;
+    /** `left` or `right` of the title row. */
+    position?: 'left' | 'right' | null;
+    /** Adds the rail's title count: "See all (10)". Absent: yes. */
+    showCount?: boolean;
+    /** Font, size, weight, case and `color`. */
+    text?: TextStyle | null;
+  };
   grid: { maxRows: number | null } | null;
   blockKey: string | null;
   headerKey: string | null;

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loadItems } from '@/app/pagesSlice';
 import type { Atom, Block, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
@@ -68,6 +68,34 @@ function withLabel(atom: Atom, label: string | null): Atom {
     style: {
       ...atom.style,
       layers: atom.style.layers.map((l) => (l.type === 'text' ? { ...l, staticText: label, bind: null } : l)),
+    },
+  };
+}
+
+/**
+ * A rail's "See all" link when no header design draws it: its words (`label`, with the count unless the
+ * editor turned it off), as a text link (`label ›`), a button, or just an arrow, in the editor's text style
+ * and colour; the rail title's colour when it has none.
+ */
+function seeAllLink(rail: RailJson, titleColor: string | null): { text: string; style: CSSProperties } {
+  const sa = rail.seeAll;
+  const style = sa.style ?? 'text';
+  const count = rail.source.count;
+  const label = sa.label ?? 'See all';
+  const words = sa.showCount === false || !count ? label : `${label} (${count})`;
+  const text = style === 'arrow' ? '›' : style === 'button' ? words : `${words} ›`;
+  const ink = sa.text?.color ?? titleColor ?? undefined;
+  return {
+    text,
+    style: {
+      ...textCss(sa.text),
+      color: ink,
+      background: 'none',
+      border: style === 'button' ? `1px solid ${ink ?? 'currentColor'}` : 'none',
+      borderRadius: style === 'button' ? 999 : undefined,
+      padding: style === 'button' ? '4px 14px' : 0,
+      cursor: 'pointer',
+      font: sa.text ? undefined : 'inherit',
     },
   };
 }
@@ -192,17 +220,41 @@ export function Rail({
       />
     ) : null;
 
+  // The link beside the title, as the rail's `seeAll` says, unless a header or footer design draws it.
+  const sa = rail.seeAll;
+  const designDraws = [header, footer].some(
+    (b) =>
+      b &&
+      (b.atoms.some((a) => a.action === 'see_all') ||
+        b.components.some((c) => c.atoms.some((a) => a.action === 'see_all'))),
+  );
+  const link = sa.show && sa.label && !designDraws ? seeAllLink(rail, t.color) : null;
+  const linkLeft = sa.position === 'left';
+
   return (
     <section ref={inViewRef} aria-label={rail.title ?? undefined} style={fillCss(rail.background)}>
       <div ref={widthRef}>
-        {(!t.hidden && rail.title) || (rail.seeAll.show && rail.seeAll.label) ? (
-          <div style={{ display: 'flex', alignItems: 'baseline', paddingLeft: start, paddingRight: end }}>
+        {(!t.hidden && rail.title) || link ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 12,
+              paddingLeft: start,
+              paddingRight: end,
+            }}
+          >
+            {linkLeft && link && (
+              <button type="button" onClick={() => onSeeAll(rail)} style={link.style}>
+                {link.text}
+              </button>
+            )}
             <div role="heading" aria-level={2} style={{ ...textCss(t), flex: '1 1 auto' }}>
               {!t.hidden ? rail.title : null}
             </div>
-            {rail.seeAll.show && rail.seeAll.label && (
-              <button type="button" onClick={() => onSeeAll(rail)}>
-                {rail.seeAll.label}
+            {!linkLeft && link && (
+              <button type="button" onClick={() => onSeeAll(rail)} style={link.style}>
+                {link.text}
               </button>
             )}
           </div>
