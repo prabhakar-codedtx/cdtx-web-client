@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '@/app/hooks';
 import { showToast } from '@/app/uiSlice';
 import { DETAIL_PAGES } from '@/lib/config';
-import type { Rail, Title } from '@/lib/api/types';
+import type { Block, Rail, Title } from '@/lib/api/types';
 
 /**
  * What a tap does. The JSON says which tap: a card uses `rail.tap.cards[title.id]`, else
@@ -66,9 +66,25 @@ export function useTitleActions() {
     [act, detail, dispatch],
   );
 
-  const seeAll = useCallback(() => {
-    dispatch(showToast('Opening a full list is not available yet.'));
-  }, [dispatch]);
+  /** A rail's "See all", as its `seeAll.tap` says: a link, nothing, or (the default) all of the rail's titles in a grid. */
+  const seeAll = useCallback(
+    (rail: Rail, block: Block | null, slug: string | null) => {
+      const tap = rail.seeAll.tap;
+      if (tap?.type === 'none') return;
+      if (tap?.type === 'link') {
+        if (tap.target) window.open(tap.target, '_blank', 'noopener');
+        return;
+      }
+      if (!slug) {
+        dispatch(showToast('This list cannot be opened from here.'));
+        return;
+      }
+      navigate(`/list/${encodeURIComponent(slug)}/${encodeURIComponent(rail.key)}`, {
+        state: { rail, block },
+      });
+    },
+    [navigate, dispatch],
+  );
 
   return { open, act, seeAll };
 }
