@@ -40,7 +40,7 @@ export function PlayerScreen() {
   // What the title offers (its qualities, audio languages, subtitles, intro, season episodes): the API's.
   const offer = useTitlePlayback(id, video, say);
   const title = offer.title ?? fromState ?? fromStore;
-  const { status, config, source, answer } = usePlayerConfig();
+  const { status, config } = usePlayerConfig();
   const [wrapRef, available] = useElementWidth<HTMLDivElement>();
   const viewportH = useViewportHeight();
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -92,19 +92,8 @@ export function PlayerScreen() {
         <div style={{ color: '#fff' }}>Loading…</div>
       ) : (
         <>
-          {/* Which player config was used (the address asked and what it answered): a small note over the corner. */}
+          {/* A note over the corner when the title has no video address. */}
           <div style={{ position: 'absolute', top: 4, left: 8, zIndex: 20, fontSize: 12, color: '#9aa0ae' }}>
-            {answer && (
-              <div role="note">
-                Player config: <code>{answer.url}</code> answered {answer.status || 'nothing'}
-                {source === 'server'
-                  ? ''
-                  : source === 'sample'
-                    ? " (none published): showing the backend's sample layout."
-                    : " (none published): the browser's own player."}
-                {answer.trackingId && source !== 'server' ? ` tracking_id ${answer.trackingId}` : ''}
-              </div>
-            )}
             {!src && <div role="note">This title has no video address in the delivery API yet.</div>}
           </div>
           {toast && (
