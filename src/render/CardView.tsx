@@ -168,7 +168,7 @@ function ComponentView({
         );
       }
       const atom = it.id ? byId.get(it.id) : undefined;
-      if (!atom || !isDrawn(atom, ctx.title)) return null;
+      if (!atom || !isDrawn(atom, ctx.title, ctx.aspect)) return null;
       return <AtomView key={atom.id} atom={atom} ctx={ctx} inFrame={false} />;
     });
   return <div style={css}>{draw(al.items)}</div>;
@@ -252,13 +252,13 @@ export function CardView({
   const placed = useMemo<Placed[]>(() => {
     const out: Placed[] = [];
     for (const atom of block.atoms) {
-      if (!atom.frame || !isDrawn(atom, title)) continue;
+      if (!atom.frame || !isDrawn(atom, title, card.imageAspect)) continue;
       out.push({ id: atom.id, frame: atom.frame, z: atom.zIndex, atom });
     }
     for (const comp of block.components) {
       if (comp.slot !== 'card' || !comp.frame) continue;
       const ids = new Set(listed(comp.autoLayout.items));
-      if (!comp.atoms.some((a) => ids.has(a.id) && isDrawn(a, title))) continue;
+      if (!comp.atoms.some((a) => ids.has(a.id) && isDrawn(a, title, card.imageAspect))) continue;
       out.push({ id: comp.id, frame: comp.frame, z: comp.zIndex, comp });
     }
     return out;

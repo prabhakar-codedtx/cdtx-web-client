@@ -46,11 +46,12 @@ const times = (v: number | null | undefined, k: number): number | undefined =>
   v === null || v === undefined ? undefined : v * k;
 
 /** An atom is drawn only when the title has its badge and it has something to show. */
-export function isDrawn(atom: Atom, title: Title | null): boolean {
+export function isDrawn(atom: Atom, title: Title | null, aspect: string | null = null): boolean {
   if (!shown(atom, title)) return false;
   if (atom.type === 'text') return Boolean(atomText(atom, title) || logoOf(atom, title));
   if (atom.type === 'meta') return atom.style.meta ? metaSegments(atom.style.meta, title).length > 0 : false;
-  if (atom.type === 'image') return Boolean(imageOf(atom, title, null));
+  // A picture is looked up in the card's own shape (`imageAspect`), as it is when drawn.
+  if (atom.type === 'image') return Boolean(imageOf(atom, title, aspect));
   if (atom.type === 'box') {
     // A box that only shows title fields (a Year, a Language, a Genre) has nothing to draw when the
     // title has none of them; one with an icon, a bar or fixed words always draws.
