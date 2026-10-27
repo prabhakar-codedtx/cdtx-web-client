@@ -504,7 +504,8 @@ export interface Rail {
   } | null;
   tap: { card: TapAction; cards: Record<string, TapAction>; elements: Record<string, string> };
   railLayout: RailLayout;
-  seeAll: { show: boolean; label: string | null };
+  /** `tap`: where it goes: `collection` (or none sent) the rail's own titles, `link` its `target`, `none` nowhere. */
+  seeAll: { show: boolean; label: string | null; tap?: TapAction };
   grid: { maxRows: number | null } | null;
   blockKey: string | null;
   headerKey: string | null;

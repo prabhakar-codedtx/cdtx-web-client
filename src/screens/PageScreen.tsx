@@ -52,7 +52,13 @@ export function PageScreen({ page, contentId }: { page: Page; contentId?: string
             <HeroBanner key={rail.key} rail={rail} blocks={blocks} onOpen={open} onAction={act} />
           ) : (
             <div key={rail.key} style={paddingCss(sp.railPadding)}>
-              <Rail rail={rail} blocks={blocks} onOpen={open} onAction={act} onSeeAll={seeAll} />
+              <Rail
+                rail={rail}
+                blocks={blocks}
+                onOpen={open}
+                onAction={act}
+                onSeeAll={(r) => seeAll(r, r.blockKey ? (blocks[r.blockKey] ?? null) : null, page.slug)}
+              />
             </div>
           ),
         )}
