@@ -72,8 +72,8 @@ export function TopNav() {
         padding: '0 32px',
         overflowX: 'auto',
         background: solid ? bg : `linear-gradient(to bottom, ${bg}e6, ${bg}00)`,
-        borderBottom: `1px solid ${solid ? (colors['border'] ?? 'transparent') : 'transparent'}`,
-        transition: 'background 0.2s ease, border-color 0.2s ease',
+        // No line under the bar (not even a transparent one that turns dark on scroll).
+        transition: 'background 0.2s ease',
       }}
     >
       <style>{CSS}</style>
