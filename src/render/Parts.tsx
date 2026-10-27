@@ -20,6 +20,8 @@ export interface PartCtx {
   aspect: string | null;
   /** A tap on an atom that has an `action` (play, more_info, watchlist ...). */
   onAction?: (action: string, title: Title | null) => void;
+  /** A rail's header or footer: the rail's own title, for a text bound to `railTitle`. */
+  railTitle?: string | null;
 }
 
 const FLEX: Record<string, string> = {
@@ -49,7 +51,15 @@ export function isDrawn(atom: Atom, title: Title | null): boolean {
   if (atom.type === 'text') return Boolean(atomText(atom, title) || logoOf(atom, title));
   if (atom.type === 'meta') return atom.style.meta ? metaSegments(atom.style.meta, title).length > 0 : false;
   if (atom.type === 'image') return Boolean(imageOf(atom, title, null));
-  return atom.type === 'box';
+  if (atom.type === 'box') {
+    // A box that only shows title fields (a Year, a Language, a Genre) has nothing to draw when the
+    // title has none of them; one with an icon, a bar or fixed words always draws.
+    const layers = atom.style.layers;
+    const fields =
+      layers.length > 0 && layers.every((l) => l.type === 'text' && l.bind && l.bind !== 'railTitle');
+    return fields ? layers.some((l) => titleText(title, l.bind) !== '') : true;
+  }
+  return false;
 }
 
 const atomText = (atom: Atom, title: Title | null): string =>
@@ -115,7 +125,11 @@ function layerView(layer: Layer, i: number, ctx: PartCtx, focusColor: string | n
     return <Icon key={i} files={files} size={times(layer.size, k)} color={color} />;
   }
   if (layer.type === 'text') {
-    const text = layer.bind ? titleText(ctx.title, layer.bind) : (layer.staticText ?? '');
+    const text = layer.bind
+      ? layer.bind === 'railTitle'
+        ? (ctx.railTitle ?? '')
+        : titleText(ctx.title, layer.bind)
+      : (layer.staticText ?? '');
     if (!text) return null;
     return (
       <span key={i} style={{ ...textCss(layer.text, k), ...(color ? { color } : {}) }}>

@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loadItems } from '@/app/pagesSlice';
-import type { Block, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
+import type { Atom, Block, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { useInView } from '@/lib/device/useInView';
 import { CardView } from '@/render/CardView';
+import { AtomView, type PartCtx } from '@/render/Parts';
 import { fillCss, paddingCss, textCss } from '@/lib/render/paint';
 
 /**
@@ -57,6 +58,18 @@ export function cardSize(
     w = room;
   }
   return { w: Math.max(0, Math.floor(w * 100) / 100), h: Math.max(0, Math.floor(h * 100) / 100) };
+}
+
+/** An atom with the rail's own words in place of its text layer's, when the rail has some. */
+function withLabel(atom: Atom, label: string | null): Atom {
+  if (!label) return atom;
+  return {
+    ...atom,
+    style: {
+      ...atom.style,
+      layers: atom.style.layers.map((l) => (l.type === 'text' ? { ...l, staticText: label, bind: null } : l)),
+    },
+  };
 }
 
 export function Rail({
@@ -115,18 +128,69 @@ export function Rail({
   const t = rail.titleStyle;
   const tappable = rail.tap.card.type !== 'none' || Object.keys(rail.tap.cards).length > 0;
 
-  // One card (and the gap after it) at a time.
-  const scroll = (dir: 1 | -1) => rowRef.current?.scrollBy({ left: dir * (w + gap) });
-  // A header or footer design spans the lane, at its own shape.
-  const spanning = (b: Block) => (
-    <CardView
-      block={b}
-      title={null}
-      width={lane}
-      height={b.card.width && b.card.height ? (lane * b.card.height) / b.card.width : 0}
-      standalone
-    />
-  );
+  // A header or footer that is a strip (`card.display: "strip"`): as wide as the lane and as high as its
+  // content, its parts laid out as `card.strip` says. A text bound to `railTitle` is the rail's title.
+  const stripCtx: PartCtx = {
+    title: null,
+    fit: 1,
+    cardW: lane,
+    aspect: null,
+    railTitle: rail.title,
+    onAction: (action) => {
+      if (action === 'see_all') onSeeAll(rail);
+    },
+  };
+  const strip = (b: Block) => {
+    const s = b.card.strip;
+    const along: Record<string, string> = {
+      start: 'flex-start',
+      center: 'center',
+      end: 'flex-end',
+      between: 'space-between',
+    };
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: s?.direction === 'column' ? 'column' : 'row',
+          alignItems: along[s?.align ?? ''] ?? 'center',
+          justifyContent: along[s?.distribute ?? ''] ?? 'flex-start',
+          gap: s?.gap ?? undefined,
+          padding: `${s?.paddingY ?? 0}px ${s?.paddingX ?? 0}px`,
+          width: lane,
+          boxSizing: 'border-box',
+        }}
+      >
+        {b.atoms
+          // The header is one design shared by rails: its "See all" link is drawn only on a rail that
+          // has one (`seeAll.show`), and in that rail's own words (`seeAll.label`).
+          .filter((a) => a.action !== 'see_all' || rail.seeAll.show)
+          .map((a) => (
+            <AtomView
+              key={a.id}
+              atom={a.action === 'see_all' ? withLabel(a, rail.seeAll.label) : a}
+              ctx={stripCtx}
+              inFrame={false}
+            />
+          ))}
+      </div>
+    );
+  };
+  // Otherwise a header or footer design spans the lane, at its own shape. One that places nothing on its
+  // card (its atoms and components have no frame) has nothing to draw, so it takes no room: sized by its
+  // card's shape it would be an empty box as tall as the lane is wide.
+  const spanning = (b: Block) =>
+    b.card.display === 'strip' ? (
+      strip(b)
+    ) : b.atoms.some((a) => a.frame) || b.components.some((c) => c.slot === 'card' && c.frame) ? (
+      <CardView
+        block={b}
+        title={null}
+        width={lane}
+        height={b.card.width && b.card.height ? (lane * b.card.height) / b.card.width : 0}
+        standalone
+      />
+    ) : null;
 
   return (
     <section ref={inViewRef} aria-label={rail.title ?? undefined} style={fillCss(rail.background)}>
@@ -175,16 +239,6 @@ export function Rail({
                 />
               ))}
             </div>
-            {scrolls && items.length > 1 && (
-              <>
-                <button type="button" onClick={() => scroll(-1)}>
-                  Previous
-                </button>
-                <button type="button" onClick={() => scroll(1)}>
-                  Next
-                </button>
-              </>
-            )}
             {footer && spanning(footer)}
           </div>
         )}

@@ -200,3 +200,17 @@ export async function getRailItems(contentUrl: string): Promise<Title[]> {
   const { data } = await http.get<Envelope<Title>>(path(contentUrl));
   return data.data;
 }
+
+/** One title with what the player offers for it (qualities, audio languages, subtitles, intro). */
+export async function getTitle(id: string, ctx: DeliveryContext): Promise<Title | null> {
+  const { data } = await http.get<Envelope<Title>>(`/v1/content/${encodeURIComponent(id)}`, { params: ctx });
+  return data.data[0] ?? null;
+}
+
+/** The episodes of the season (or series) the title belongs to, in order; an episode gets its season's. */
+export async function getEpisodes(id: string, ctx: DeliveryContext): Promise<Title[]> {
+  const { data } = await http.get<Envelope<Title>>(`/v1/content/${encodeURIComponent(id)}/episodes`, {
+    params: { ...ctx, limit: 100 },
+  });
+  return data.data;
+}

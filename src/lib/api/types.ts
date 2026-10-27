@@ -59,6 +59,8 @@ export interface Theme {
   fonts: ThemeFont[];
   /** The font of any text whose `fontFamily` is null. */
   defaultFontFamily: string | null;
+  /** The Design System's colours: `key` (`primary`, `background`, `text-primary`...) and its `value`. */
+  colors?: { key: string; name?: string; group?: string; value: string }[];
 }
 
 // ---- navigation ------------------------------------------------------------------------------
@@ -101,6 +103,14 @@ export type BadgeKey =
   | 'exclusive'
   | 'original';
 
+/** What the player offers for one title (`GET /v1/content/{id}`): only what the title really has. */
+export interface Playback {
+  renditions: { id: string; label: string; height: number | null; bitrateKbps: number | null; url: string }[];
+  audioTracks: { id: string; language: string; label: string; detail: string | null; url: string | null }[];
+  subtitles: { id: string; language: string; label: string; kind: string; url: string | null }[];
+  intro: { start: number; end: number } | null;
+}
+
 /** One title of a rail. An atom's `bind` and a meta row's `fields` name these keys. */
 export interface Title {
   id: string;
@@ -122,6 +132,8 @@ export interface Title {
   previewVideoUrl: string | null;
   availableUntil: string | null;
   entitlements: unknown;
+  /** Only on a title asked for by id (`GET /v1/content/{id}`), not on a rail's titles. */
+  playback?: Playback;
   [key: string]: unknown;
 }
 
@@ -338,6 +350,8 @@ export interface LayoutItem {
   id: string | null;
   direction: 'horizontal' | 'vertical' | string | null;
   gap: number | null;
+  /** A group of facts in a row: drawn between the ones that show, with `gap` on each side. */
+  separator?: string | null;
   items: LayoutItem[];
 }
 
@@ -386,9 +400,18 @@ export interface Card {
   shape: 'rectangle' | 'ribbon' | string | null;
   /** The outline as fractions of the card; [] = a rectangle. */
   shapePolygon: Point[];
-  display: 'card' | 'hero' | string | null;
-  /** A hero: `width: screen`, `height: screen | ratio`. */
+  display: 'card' | 'hero' | 'strip' | string | null;
+  /** A hero: `width: screen`, `height: screen | ratio`. A strip: `width: lane`, `height: hug`. */
   stretch: { width: string | null; height: string | null } | null;
+  /** A strip (a rail's header or footer that is not a card): how its parts are laid out. */
+  strip?: {
+    direction?: 'row' | 'column' | string | null;
+    gap?: number | null;
+    align?: string | null;
+    distribute?: string | null;
+    paddingX?: number | null;
+    paddingY?: number | null;
+  } | null;
   /** Which of a title's `images[]` the card shows. */
   imageAspect: string | null;
   background: Fill | null;

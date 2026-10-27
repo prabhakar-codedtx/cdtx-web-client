@@ -1,7 +1,9 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { useAppSelector } from '@/app/hooks';
 import type { Control, PanelPlacement, PlayerConfig } from '@/lib/api/player';
 import type { Atom, Block } from '@/lib/api/types';
 import { fillCss } from '@/lib/render/paint';
+import { CardView } from '@/render/CardView';
 import { AtomView, type PartCtx } from '@/render/Parts';
 import type { Media, Option } from '@/player/useMedia';
 
@@ -19,6 +21,23 @@ export interface Group {
 }
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+/** The client's own look for a panel with no design: a card in the Design System's colours, a list of
+ * rows with a pointer, a hover and the one in use marked. */
+const PLAIN_CSS = `
+.pp-panel { min-width: 240px; padding: 12px; box-sizing: border-box; box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  background: var(--pp-bg); color: var(--pp-text); border: 1px solid var(--pp-border); }
+.pp-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 8px 10px;
+  font-size: 16px; font-weight: 600; }
+.pp-close { border: 0; border-radius: 6px; padding: 4px 10px; background: transparent; color: var(--pp-muted); font-size: 13px; }
+.pp-close:hover { color: var(--pp-text); background: var(--pp-hover); }
+.pp-opt { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 14px;
+  outline: none; transition: background 0.12s ease; }
+.pp-opt:hover, .pp-opt:focus-visible { background: var(--pp-hover); }
+.pp-opt[aria-checked="true"] { color: var(--pp-primary); font-weight: 600; }
+.pp-tick { display: inline-block; width: 14px; }
+.pp-detail { margin-left: auto; padding-left: 16px; font-size: 12px; color: var(--pp-muted); }
+`;
 
 /** What a panel lists, from `panel.data` and the stream (`renditions`, `audioTracks`, `subtitleTracks`). */
 export function panelGroups(
@@ -43,6 +62,13 @@ export function panelGroups(
   const audio: Group = { title: null, options: media.audioOptions, pick: media.pickAudio };
   switch (control.id) {
     case 'quality':
+      // demo only: sample quality levels (`demo.ts`).
+      if (media.renditions) {
+        return {
+          title: data?.title ?? null,
+          groups: [{ title: null, options: media.renditions, pick: (id) => media.pickRendition?.(id) }],
+        };
+      }
       // A plain `<video>` stream has no renditions to choose from: only the first option ("Auto").
       return {
         title: data?.title ?? null,
@@ -97,6 +123,13 @@ export function panelGroups(
       };
     }
     case 'episodes':
+      // demo only: sample episodes (`demo.ts`).
+      if (media.episodes) {
+        return {
+          title: data?.title ?? null,
+          groups: [{ title: null, options: media.episodes, pick: (id) => media.pickEpisode?.(id) }],
+        };
+      }
       // The episodes of the season playing: the delivery API has no call for them yet.
       return { title: data?.title ?? null, groups: [] };
     default:
@@ -187,7 +220,23 @@ export function Panel({
   const placement = contract?.placement[panel?.opens ?? ''];
   const design: Block | undefined = panel?.component ? config.panels?.[panel.component] : undefined;
   const { title, groups } = panelGroups(control, media, openOther);
+  // Episodes: one card of the `rows` design per episode of the season now playing.
+  const rowDesign = control.id === 'episodes' && panel?.row ? config.rows?.[panel.row] : undefined;
+  const episodeCards = rowDesign && media.episodeTitles?.length ? media.episodeTitles : null;
   const rootRef = useRef<HTMLDivElement>(null);
+  const theme = useAppSelector((s) => s.launch.theme);
+  const colors = useMemo(
+    () => Object.fromEntries((theme?.colors ?? []).map((c) => [c.key, c.value])) as Record<string, string>,
+    [theme],
+  );
+  const plainVars = {
+    '--pp-bg': colors['surface'] ?? '#151923',
+    '--pp-text': colors['text-primary'] ?? '#ffffff',
+    '--pp-muted': colors['text-muted'] ?? '#8a91a3',
+    '--pp-border': colors['border'] ?? '#2c3242',
+    '--pp-hover': colors['surface-raised'] ?? '#1e2330',
+    '--pp-primary': colors['primary'] ?? '#ffffff',
+  } as CSSProperties;
 
   // Focus starts on the selected option; Back (Escape) closes it (`panelContract.focus`).
   useEffect(() => {
@@ -228,23 +277,32 @@ export function Panel({
               choose(g, o.id);
             }
           }}
-          style={usable ? { display: 'flex', alignItems: 'center' } : undefined}
+          className={usable ? undefined : 'pp-opt'}
+          style={usable ? { display: 'flex', alignItems: 'center' } : { cursor: 'pointer' }}
         >
-          {usable
-            ? rowAtoms.map((a) => {
-                const role = roleOf(a);
-                if (a.showWhen === contract!.state.selected && !o.selected) return null;
-                if (a.showWhen === contract!.state.unselected && o.selected) return null;
-                const atom = { ...a, showWhen: null };
-                if (role === roles.label)
-                  return <AtomView key={a.id} atom={withText(atom, o.label)} ctx={ctx} inFrame={false} />;
-                if (role === roles.detail)
-                  return o.detail ? (
-                    <AtomView key={a.id} atom={withText(atom, o.detail)} ctx={ctx} inFrame={false} />
-                  ) : null;
-                return <AtomView key={a.id} atom={atom} ctx={ctx} inFrame={false} />;
-              })
-            : `${o.selected ? '✓ ' : ''}${o.label}${o.detail ? ` ${o.detail}` : ''}`}
+          {usable ? (
+            rowAtoms.map((a) => {
+              const role = roleOf(a);
+              if (a.showWhen === contract!.state.selected && !o.selected) return null;
+              if (a.showWhen === contract!.state.unselected && o.selected) return null;
+              const atom = { ...a, showWhen: null };
+              if (role === roles.label)
+                return <AtomView key={a.id} atom={withText(atom, o.label)} ctx={ctx} inFrame={false} />;
+              if (role === roles.detail)
+                return o.detail ? (
+                  <AtomView key={a.id} atom={withText(atom, o.detail)} ctx={ctx} inFrame={false} />
+                ) : null;
+              return <AtomView key={a.id} atom={atom} ctx={ctx} inFrame={false} />;
+            })
+          ) : (
+            <>
+              <span className="pp-tick" aria-hidden>
+                {o.selected ? '✓' : ''}
+              </span>
+              <span>{o.label}</span>
+              {o.detail && <span className="pp-detail">{o.detail}</span>}
+            </>
+          )}
         </div>
       );
     });
@@ -271,12 +329,18 @@ export function Panel({
         role="dialog"
         aria-label={title ?? control.id}
         onClick={(e) => e.stopPropagation()}
+        className={design ? undefined : 'pp-panel'}
         style={{
+          ...(design ? {} : plainVars),
           ...placementCss(placement, control, k, anchor, surface),
           ...(design ? fillCss(design.card.background) : {}),
         }}
       >
-        <div style={usable ? { display: 'flex', alignItems: 'center' } : undefined}>
+        {!design && <style>{PLAIN_CSS}</style>}
+        <div
+          className={usable ? undefined : 'pp-head'}
+          style={usable ? { display: 'flex', alignItems: 'center' } : undefined}
+        >
           {usable ? (
             design!.atoms
               .filter((a) => !repeatOf(a))
@@ -294,20 +358,74 @@ export function Panel({
               })
           ) : (
             <>
-              {title && <strong>{title}</strong>}
-              <button type="button" onClick={onClose}>
+              <span>{title}</span>
+              <button type="button" className="pp-close" onClick={onClose}>
                 Close
               </button>
             </>
           )}
         </div>
-        {groups.map((g, i) => (
-          <div key={i} role="menu" aria-label={g.title ?? title ?? undefined}>
-            {g.title && <div>{g.title}</div>}
-            {options(g)}
+        {episodeCards && rowDesign && (
+          <div
+            role="menu"
+            aria-label={title ?? 'Episodes'}
+            style={{
+              display: 'flex',
+              gap: 12 * k,
+              overflowX: 'auto',
+              padding: '4px 4px 8px',
+              maxWidth: (surface?.width ?? 800) * 0.9,
+            }}
+          >
+            {episodeCards.map((e) => {
+              const w = (panel?.list?.itemWidth ?? rowDesign.card.width ?? 176) * k;
+              const h = w * ((rowDesign.card.height ?? 9) / (rowDesign.card.width ?? 16));
+              const playing = e.id === media.episodes?.find((o) => o.selected)?.id;
+              return (
+                <div
+                  key={e.id}
+                  role="menuitemradio"
+                  aria-checked={playing}
+                  tabIndex={0}
+                  onClick={() => {
+                    media.pickEpisode?.(e.id);
+                    if (panel?.closeOnSelect !== false) onClose();
+                  }}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault();
+                      media.pickEpisode?.(e.id);
+                      if (panel?.closeOnSelect !== false) onClose();
+                    }
+                  }}
+                  style={{ flex: '0 0 auto', width: w, cursor: 'pointer', outline: 'none' }}
+                >
+                  <div
+                    style={{
+                      width: w,
+                      height: h,
+                      borderRadius: (rowDesign.card.cornerRadiusFrac.topLeft ?? 0) * w,
+                      boxShadow: playing ? '0 0 0 2px #ea6a00' : undefined,
+                    }}
+                  >
+                    <CardView block={rowDesign} title={e} width={w} height={h} />
+                  </div>
+                  <div style={{ marginTop: 6, color: '#ffffff', fontSize: 13 * k, fontWeight: 600 }}>
+                    {[e.episodeLabel, e.title].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-        {groups.length === 0 && <div>Nothing to choose from for this title.</div>}
+        )}
+        {!episodeCards &&
+          groups.map((g, i) => (
+            <div key={i} role="menu" aria-label={g.title ?? title ?? undefined}>
+              {g.title && <div>{g.title}</div>}
+              {options(g)}
+            </div>
+          ))}
+        {!episodeCards && groups.length === 0 && <div>Nothing to choose from for this title.</div>}
       </div>
     </div>
   );

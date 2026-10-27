@@ -3,6 +3,7 @@ import { useAppSelector } from '@/app/hooks';
 import { getPlayerConfig, type PlayerConfigAnswer } from '@/lib/api/endpoints';
 import type { PlayerConfig } from '@/lib/api/player';
 import { useDt } from '@/lib/device/useDt';
+import { adaptPlayerConfig } from '@/player/adapt';
 
 export interface PlayerConfigState {
   status: 'loading' | 'ready';
@@ -49,7 +50,9 @@ export function usePlayerConfig(): PlayerConfigState {
     void (async () => {
       const answer = await getPlayerConfig(launch, dt);
       if (answer.config) {
-        if (live) setState({ status: 'ready', config: answer.config, source: 'server', answer });
+        // The server sends schema 4; the player draws schema 3's shape (`adapt.ts`).
+        const config = adaptPlayerConfig(answer.config);
+        if (live) setState({ status: 'ready', config, source: 'server', answer });
         return;
       }
       const sample = useSample ? await sampleFor(dt) : null;

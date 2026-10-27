@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Title } from '@/lib/api/types';
 
 /** One choice of a panel: `{label, detail, selected}` as the player-config guide defines it. */
 export interface Option {
@@ -26,6 +27,14 @@ export interface Media {
   subtitleOptions: Option[];
   pickAudio: (id: string) => void;
   pickSubtitle: (id: string | null) => void;
+  /** demo only (`demo.ts`): sample quality levels, season episodes and what Skip intro / Next episode do. */
+  renditions?: Option[];
+  episodes?: Option[];
+  /** The titles behind `episodes`, for the Episodes card. */
+  episodeTitles?: Title[];
+  pickRendition?: (id: string) => void;
+  pickEpisode?: (id: string) => void;
+  demo?: Record<string, () => void>;
 }
 
 interface AudioTrackLike {

@@ -77,7 +77,12 @@ export function HeroBanner({
   const thumbRatio = tw && th ? tw / th : ratio;
 
   return (
-    <section ref={ref} aria-roledescription="carousel" aria-label={rail.title ?? undefined}>
+    <section
+      ref={ref}
+      aria-roledescription="carousel"
+      aria-label={rail.title ?? undefined}
+      style={{ position: 'relative' }}
+    >
       {width > 0 && (
         <div key={item?.id ?? 'empty'}>
           <CardView
@@ -122,7 +127,19 @@ export function HeroBanner({
         </div>
       )}
       {hl?.paging && count > 1 && (
-        <div>
+        // Dots over the bottom of the slide: the current one is a longer pill.
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 12,
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 8,
+            pointerEvents: 'none',
+          }}
+        >
           {items.map((it, i) => (
             <button
               type="button"
@@ -130,9 +147,18 @@ export function HeroBanner({
               aria-label={`Slide ${i + 1}`}
               aria-current={i === at}
               onClick={() => setIndex(i)}
-            >
-              {i + 1}
-            </button>
+              style={{
+                width: i === at ? 24 : 8,
+                height: 8,
+                padding: 0,
+                border: 0,
+                borderRadius: 4,
+                background: i === at ? '#ffffff' : 'rgba(255,255,255,0.45)',
+                cursor: 'pointer',
+                pointerEvents: 'auto',
+                transition: 'width 0.2s ease, background 0.2s ease',
+              }}
+            />
           ))}
         </div>
       )}

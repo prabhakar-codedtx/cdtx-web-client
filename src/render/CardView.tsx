@@ -1,4 +1,12 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import {
+  Fragment,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from 'react';
 import styled from 'styled-components';
 import type { Atom, Block, Card, Component, Frame, LayoutItem, Rule, Title } from '@/lib/api/types';
 import { imageSrc } from '@/lib/render/fields';
@@ -131,12 +139,31 @@ function ComponentView({
   const draw = (items: LayoutItem[]) =>
     items.map((it, i) => {
       if (it.type === 'group') {
+        const members = draw(it.items).filter(Boolean);
+        if (members.length === 0) return null;
+        // A group of facts in a row (Year | Genre | Duration): a separator between the ones that show.
+        const sep = it.direction !== 'vertical' ? it.separator : null;
         return (
           <div
             key={it.id ?? `g${i}`}
-            style={{ display: 'flex', flexDirection: row(it.direction), gap: (it.gap ?? 0) * k }}
+            style={{
+              display: 'flex',
+              flexDirection: row(it.direction),
+              alignItems: it.direction === 'vertical' ? 'flex-start' : 'center',
+              flexWrap: it.direction === 'vertical' ? 'nowrap' : 'wrap',
+              gap: (it.gap ?? 0) * k,
+            }}
           >
-            {draw(it.items)}
+            {members.map((m, j) => (
+              <Fragment key={j}>
+                {j > 0 && sep && (
+                  <span aria-hidden style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 * k }}>
+                    {sep}
+                  </span>
+                )}
+                {m}
+              </Fragment>
+            ))}
           </div>
         );
       }

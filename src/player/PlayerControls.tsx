@@ -81,6 +81,54 @@ function withText(atom: Atom, text: string): Atom {
   };
 }
 
+/** How a control answers the pointer and the keyboard: a lift on hover, a press, and a ring on focus. */
+const FEEDBACK_CSS = `
+[data-pc] { transition: transform 0.12s ease, filter 0.12s ease; outline: none; }
+[data-pc]:hover { filter: brightness(1.15); transform: scale(1.04); }
+[data-pc]:active { transform: scale(0.94); }
+[data-pc]:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,0.95), 0 0 0 5px rgba(234,106,0,0.7); }
+`;
+
+/** Play/Pause while playing: the design carries only the play icon, so the pause glyph is drawn here in
+ * the same size and colour. */
+function withPauseIcon(atom: Atom): Atom {
+  return {
+    ...atom,
+    style: {
+      ...atom.style,
+      layers: atom.style.layers.map((l) => {
+        if (l.type !== 'icon' || !l.icon) return l;
+        const paint = l.color ?? '#ffffff';
+        const svg =
+          `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${paint}">` +
+          '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+        return {
+          ...l,
+          icon: {
+            draw: 'as-is',
+            svg: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+            vectorDrawable: null,
+            png: [],
+          },
+        };
+      }),
+    },
+  };
+}
+
+/** The seek bar's look with its progress at `percent` (0-100): the slider layer draws the track and fill. */
+function withProgress(atom: Atom, percent: number): Atom {
+  return {
+    ...atom,
+    style: {
+      ...atom.style,
+      layers: atom.style.layers.map((l) =>
+        l.type === 'slider' && l.slider ? { ...l, slider: { ...l.slider, value: percent } } : l,
+      ),
+    },
+  };
+}
+
 export function PlayerControls({
   config,
   ad,
@@ -90,6 +138,7 @@ export function PlayerControls({
   width: W,
   height: H,
   surfaceRef,
+  stageRef,
   video,
   onBack,
   onUnavailable,
@@ -103,13 +152,18 @@ export function PlayerControls({
   width: number;
   height: number;
   surfaceRef: React.RefObject<HTMLDivElement>;
+  /** The window-filling stage the player sits on: what goes full screen. */
+  stageRef?: React.RefObject<HTMLElement>;
   video: HTMLVideoElement | null;
   onBack: () => void;
   onUnavailable: (what: string) => void;
 }) {
   const b = config.behaviour;
   // Lengths are for `surface.design`; a player of another size scales them (guide 11).
-  const k = config.surface.design.w ? W / config.surface.design.w : 1;
+  // Sizes scale by what the 16:9 design would fit in (the smaller of the two), while positions spread over
+  // the whole window: a window wider than 16:9 gets wider spacing, not bigger buttons.
+  const { w: dw, h: dh } = config.surface.design;
+  const k = dw && dh ? Math.min(W / dw, H / dh) : dw ? W / dw : 1;
   const safeX = config.surface.safe.x * k;
   const safeY = config.surface.safe.y * k;
   const SW = Math.max(0, W - 2 * safeX);
@@ -126,6 +180,32 @@ export function PlayerControls({
 
   // Drawn only when the browser has what it `requires` and its `showWhen` holds now.
   const all = ad && config.ad ? config.ad.controls : config.controls;
+  // The whole stage goes full screen (the black around the 16:9 player too), not the player's box: that
+  // would keep its pixel size.
+  const [fullscreen, setFullscreen] = useState(Boolean(document.fullscreenElement));
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void (stageRef?.current ?? surfaceRef.current)?.requestFullscreen();
+  };
+  useEffect(() => {
+    const change = () => setFullscreen(Boolean(document.fullscreenElement));
+    const key = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (e.key.toLowerCase() !== 'f' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (document.fullscreenEnabled) toggleFullscreen();
+    };
+    document.addEventListener('fullscreenchange', change);
+    window.addEventListener('keydown', key);
+    return () => {
+      document.removeEventListener('fullscreenchange', change);
+      window.removeEventListener('keydown', key);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // The product's player may not have a Fullscreen control: the client then has its own button.
+  const ownFullscreen = document.fullscreenEnabled && !config.controls.some((c) => c.id === 'fullscreen');
+
   const shown = useMemo(() => {
     const ok = all.filter(
       (c) =>
@@ -265,8 +345,7 @@ export function PlayerControls({
         media.seekBy(secs);
         return;
       case 'fullscreen':
-        if (document.fullscreenElement) void document.exitFullscreen();
-        else void surfaceRef.current?.requestFullscreen();
+        toggleFullscreen();
         return;
       case 'pip': {
         const d = document as Document & {
@@ -282,7 +361,9 @@ export function PlayerControls({
         media.toggleMute();
         return;
       default:
-        onUnavailable(c.id);
+        // demo only: what Skip intro and Next episode do (`demo.ts`).
+        if (media.demo?.[c.id]) media.demo[c.id]!();
+        else onUnavailable(c.id);
     }
   };
 
@@ -362,18 +443,39 @@ export function PlayerControls({
 
   const content = (c: Control): ReactNode => {
     if (c.id === 'seekBar') {
+      // The design's slider (track and progress colours) is what is seen; the range input on top of it
+      // is invisible and takes the pointer, the keyboard and the remote.
+      const drawn = c.look?.style.layers.some((l) => l.type === 'slider' && l.slider);
+      const percent = media.duration ? (Math.min(media.time, media.duration) / media.duration) * 100 : 0;
       return (
-        <input
-          type="range"
-          data-focus
-          aria-label="Seek"
-          min={0}
-          max={media.duration || 0}
-          step={b.seekStepSeconds}
-          value={Math.min(media.time, media.duration || 0)}
-          onChange={(e) => media.seekTo(Number(e.target.value))}
-          style={{ width: '100%', height: '100%', margin: 0 }}
-        />
+        <span style={{ position: 'relative', display: 'block', width: '100%', height: '100%' }}>
+          {drawn && c.look && (
+            <AtomView
+              atom={withProgress(c.look, percent)}
+              ctx={ctx}
+              inFrame
+              style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
+            />
+          )}
+          <input
+            type="range"
+            data-focus
+            aria-label="Seek"
+            min={0}
+            max={media.duration || 0}
+            step={b.seekStepSeconds}
+            value={Math.min(media.time, media.duration || 0)}
+            onChange={(e) => media.seekTo(Number(e.target.value))}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              margin: 0,
+              ...(drawn ? { opacity: 0, cursor: 'pointer' } : {}),
+            }}
+          />
+        </span>
       );
     }
     if (c.id === 'volume' && c.config?.showSlider !== false) {
@@ -395,7 +497,8 @@ export function PlayerControls({
         </span>
       );
     }
-    const look = c.look ? (LABELS.has(c.id) ? withText(c.look, words(c)) : c.look) : null;
+    let look = c.look ? (LABELS.has(c.id) ? withText(c.look, words(c)) : c.look) : null;
+    if (look && c.id === 'playPause' && media.playing) look = withPauseIcon(look);
     const face = look ? (
       <AtomView atom={look} ctx={ctx} inFrame style={{ width: '100%', height: '100%' }} />
     ) : (
@@ -406,6 +509,13 @@ export function PlayerControls({
         <span style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center' }}>{face}</span>
       );
     const sized = c.frame.w !== null || c.frame.h !== null;
+    // A `min` box is at least its size and grows with its content, so the control around it has only a
+    // minimum height: a face of `height: 100%` would not fill it (a 63 x 63 button drawn 63 x 39).
+    // It fills it by stretching instead.
+    const fill: CSSProperties =
+      c.frame.sizing === 'min'
+        ? { flex: '1 1 auto', alignSelf: 'stretch' }
+        : { width: sized ? '100%' : undefined, height: sized ? '100%' : undefined };
     const common = {
       'data-focus': true,
       'aria-label': c.look?.staticText ?? (typeof builtIn(c) === 'string' ? (builtIn(c) as string) : c.id),
@@ -418,6 +528,7 @@ export function PlayerControls({
       return (
         <div
           {...common}
+          data-pc=""
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -428,11 +539,12 @@ export function PlayerControls({
           }}
           style={{
             display: 'flex',
-            width: sized ? '100%' : undefined,
-            height: sized ? '100%' : undefined,
+            ...fill,
             minWidth: target,
             minHeight: target,
             cursor: 'pointer',
+            // The focus ring and the press feedback follow the design's own corners.
+            borderRadius: look.style.box.cornerRadius ? look.style.box.cornerRadius * k : undefined,
           }}
         >
           {face}
@@ -444,8 +556,7 @@ export function PlayerControls({
         type="button"
         {...common}
         style={{
-          width: sized ? '100%' : undefined,
-          height: sized ? '100%' : undefined,
+          ...fill,
           minWidth: target,
           minHeight: target,
         }}
@@ -491,14 +602,61 @@ export function PlayerControls({
         top: safeY,
         width: SW,
         height: SH,
+        // The controls fade out when idle (and are out of the tab order once gone).
         visibility: visible ? 'visible' : 'hidden',
+        opacity: visible ? 1 : 0,
+        transition: visible ? 'opacity 0.15s ease' : 'opacity 0.3s ease, visibility 0s linear 0.3s',
       }}
     >
+      <style>{FEEDBACK_CSS}</style>
       {shown.map((c) => (
         <div key={c.id} data-control={c.id} style={place(c)}>
           {content(c)}
         </div>
       ))}
+      {ownFullscreen && (
+        <button
+          type="button"
+          data-focus
+          data-pc=""
+          aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
+          onClick={toggleFullscreen}
+          style={{
+            position: 'absolute',
+            top: 12 * k,
+            right: 12 * k,
+            width: Math.max(36 * k, b.minTarget * k),
+            height: Math.max(36 * k, b.minTarget * k),
+            padding: 0,
+            border: 0,
+            borderRadius: 8 * k,
+            background: '#1e2330',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <svg
+            width={18 * k}
+            height={18 * k}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            {fullscreen ? (
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+            ) : (
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            )}
+          </svg>
+        </button>
+      )}
       {opened && (
         <Panel
           control={opened}
