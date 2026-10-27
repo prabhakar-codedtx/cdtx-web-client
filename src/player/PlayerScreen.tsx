@@ -12,9 +12,10 @@ import { useTitlePlayback } from '@/player/useTitlePlayback';
 import { usePlayerConfig } from '@/player/usePlayerConfig';
 
 /**
- * `/play/:type/:id`: the video player for a title. The surface is `surface.aspect` (16:9) as wide as
- * the window allows; the controls on it are the product's published player layout
- * (`GET /v1/player-config/{product}?dt=`). With no published layout the browser's own player is shown.
+ * `/play/:type/:id`: the video player for a title. The controls span the whole window and are the
+ * product's published player layout (`GET /v1/player-config/{product}?dt=`); the picture fills the window
+ * as `surface.fit` says (`cover`: the whole window, edges cropped; `contain`, or unset: all of it, with
+ * bars where the shapes differ). With no published layout the browser's own player is shown.
  *
  * The delivery API has no stream address yet, so the stream is the title's `previewVideoUrl` when it
  * has one; without it the title's picture stands in and the controls drive an empty player.
@@ -50,11 +51,10 @@ export function PlayerScreen() {
   const media = useMemo(() => (offer.ready ? offer.extend(own) : sample), [offer, own, sample]);
   const [ad] = useState(false);
 
-  const [aw, ah] = (config?.surface.aspect ?? '16:9').split(':').map(Number);
-  const ratio = aw && ah ? aw / ah : 16 / 9;
-  // The stage is the whole window; the 16:9 player is as big as fits in it (the rest is black).
-  const W = Math.min(available, viewportH * ratio);
-  const H = W / ratio;
+  // The controls span the whole window (their positions are fractions of it); the video keeps its own
+  // shape inside (`object-fit: contain`), so a window wider than 16:9 letterboxes the picture only.
+  const W = available;
+  const H = viewportH;
 
   const facts = useMemo<PlayerFacts>(
     () => ({
@@ -139,7 +139,8 @@ export function PlayerScreen() {
                 inset: 0,
                 width: '100%',
                 height: '100%',
-                objectFit: 'contain',
+                // The product's choice (`surface.fit`); unset: all of the picture.
+                objectFit: config?.surface.fit ?? 'contain',
                 background: '#000',
               }}
             >

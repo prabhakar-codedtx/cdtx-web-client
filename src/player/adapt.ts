@@ -366,6 +366,7 @@ export function adaptPlayerConfig(raw: unknown): PlayerConfig {
       aspect: '16:9',
       design: { w: surface.width, h: surface.height },
       safe: { x: surface.safe?.x ?? 0, y: surface.safe?.y ?? 0 },
+      fit: surface.fit === 'cover' || surface.fit === 'contain' ? surface.fit : undefined,
     },
     controls: (d.controls ?? []).map(control),
     ad: d.adControls ? { controls: d.adControls.map(control) } : undefined,

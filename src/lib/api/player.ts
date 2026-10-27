@@ -83,7 +83,13 @@ export interface PlayerConfig {
   version: number;
   deviceClass: 'tv' | 'web' | 'tablet' | 'mobile' | string;
   device: { dt: string; unit: string; unitScale: number };
-  surface: { aspect: string; design: { w: number; h: number }; safe: { x: number; y: number } };
+  surface: {
+    aspect: string;
+    design: { w: number; h: number };
+    safe: { x: number; y: number };
+    /** How the picture fills the screen, when the product chose: `cover` crops to fill, `contain` shows all of it. */
+    fit?: 'contain' | 'cover';
+  };
   /** In reading order; only the controls that are switched on. */
   controls: Control[];
   /** While an ad plays, drawn instead of `controls`. */

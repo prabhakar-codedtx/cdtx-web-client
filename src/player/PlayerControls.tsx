@@ -160,7 +160,10 @@ export function PlayerControls({
 }) {
   const b = config.behaviour;
   // Lengths are for `surface.design`; a player of another size scales them (guide 11).
-  const k = config.surface.design.w ? W / config.surface.design.w : 1;
+  // Sizes scale by what the 16:9 design would fit in (the smaller of the two), while positions spread over
+  // the whole window: a window wider than 16:9 gets wider spacing, not bigger buttons.
+  const { w: dw, h: dh } = config.surface.design;
+  const k = dw && dh ? Math.min(W / dw, H / dh) : dw ? W / dw : 1;
   const safeX = config.surface.safe.x * k;
   const safeY = config.surface.safe.y * k;
   const SW = Math.max(0, W - 2 * safeX);
