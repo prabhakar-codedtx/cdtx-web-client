@@ -13,6 +13,8 @@ export function titleText(title: Title | null, key: string | null | undefined): 
   if (!title || !key) return '';
   const v = title[key];
   if (!present(v)) return '';
+  // `durationSeconds` is a number of seconds: a card shows it as a length of time, not as 2400.
+  if (key === 'durationSeconds' && typeof v === 'number') return duration(v);
   return Array.isArray(v) ? v.join(', ') : String(v);
 }
 

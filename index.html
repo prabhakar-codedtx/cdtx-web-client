@@ -6,6 +6,38 @@
     <link rel="apple-touch-icon" href="/icons/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Cdtx</title>
+    <style>
+      /* No scroll bars anywhere; the page and the rails still scroll (touch, wheel, trackpad, keys). */
+      * {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      *::-webkit-scrollbar {
+        display: none;
+      }
+      body {
+        margin: 0;
+      }
+      /* The pointing hand on everything that can be pressed: links, buttons (also a div drawn as one: a
+         card or an atom with an action), form controls. A disabled one says it cannot be. */
+      a[href],
+      button:not(:disabled),
+      [role='button']:not([aria-disabled='true']),
+      [role='tab'],
+      [role='link'],
+      summary,
+      select,
+      label[for],
+      input[type='range'],
+      input[type='checkbox'],
+      input[type='radio'] {
+        cursor: pointer;
+      }
+      button:disabled,
+      [aria-disabled='true'] {
+        cursor: not-allowed;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

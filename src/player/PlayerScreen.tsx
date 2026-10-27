@@ -6,7 +6,9 @@ import type { Title } from '@/lib/api/types';
 import { useElementWidth, useViewportHeight } from '@/lib/device/useElementWidth';
 import { imageFor } from '@/lib/render/fields';
 import { PlayerControls, type PlayerFacts } from '@/player/PlayerControls';
+import { demoOn, useDemoMedia } from '@/player/demo';
 import { useMedia } from '@/player/useMedia';
+import { useTitlePlayback } from '@/player/useTitlePlayback';
 import { usePlayerConfig } from '@/player/usePlayerConfig';
 
 /**
@@ -31,59 +33,100 @@ export function PlayerScreen() {
     }
     return null;
   });
-  const title = fromState ?? fromStore;
+  const [video, setVideo] = useState<HTMLVideoElement | null>(null);
+  const toast = useAppSelector((s) => s.ui.toast);
+  const say = useCallback((text: string) => dispatch(showToast(text)), [dispatch]);
+  // What the title offers (its qualities, audio languages, subtitles, intro, season episodes): the API's.
+  const offer = useTitlePlayback(id, video, say);
+  const title = offer.title ?? fromState ?? fromStore;
   const { status, config, source, answer } = usePlayerConfig();
   const [wrapRef, available] = useElementWidth<HTMLDivElement>();
   const viewportH = useViewportHeight();
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const [video, setVideo] = useState<HTMLVideoElement | null>(null);
-  const media = useMedia(video, title?.durationSeconds ?? null);
+  const own = useMedia(video, title?.durationSeconds ?? null);
+  // demo only (`demo.ts`): Paper Kingdoms without playback data of its own is shown with sample data.
+  const demo = demoOn(id) && !offer.ready;
+  const sample = useDemoMedia(own, demo, say);
+  const media = useMemo(() => (offer.ready ? offer.extend(own) : sample), [offer, own, sample]);
   const [ad] = useState(false);
 
   const [aw, ah] = (config?.surface.aspect ?? '16:9').split(':').map(Number);
   const ratio = aw && ah ? aw / ah : 16 / 9;
-  // As wide as there is room for, never taller than the window.
+  // The stage is the whole window; the 16:9 player is as big as fits in it (the rest is black).
   const W = Math.min(available, viewportH * ratio);
   const H = W / ratio;
 
   const facts = useMemo<PlayerFacts>(
     () => ({
-      introMarkers: false,
-      hasNext: false,
-      hasEpisodes: false,
+      introMarkers: offer.ready ? offer.facts.introMarkers : demo,
+      hasNext: offer.ready ? offer.facts.hasNext : demo,
+      hasEpisodes: offer.ready ? offer.facts.hasEpisodes : demo,
       hasAudioTracks: media.audioOptions.length > 1,
       hasSubtitles: media.subtitleOptions.length > 0,
     }),
-    [media.audioOptions.length, media.subtitleOptions.length],
+    [demo, offer.ready, offer.facts, media.audioOptions.length, media.subtitleOptions.length],
   );
   const unavailable = useCallback(
     (what: string) => dispatch(showToast(`"${what}" is not available yet.`)),
     [dispatch],
   );
 
-  const src = title?.previewVideoUrl ?? undefined;
+  const src = offer.ready ? offer.src : (title?.previewVideoUrl ?? undefined);
   const poster = imageFor(title, '0-16x9') ?? undefined;
 
   return (
-    <main ref={wrapRef}>
+    <main
+      ref={wrapRef}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10,
+        overflow: 'hidden',
+        background: '#000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       {status === 'loading' ? (
-        <div>Loading…</div>
+        <div style={{ color: '#fff' }}>Loading…</div>
       ) : (
         <>
-          {/* Which player config was used: the address asked and what it answered. */}
-          {answer && (
-            <div role="note">
-              Player config: <code>{answer.url}</code> answered {answer.status || 'nothing'}
-              {source === 'server'
-                ? ''
-                : source === 'sample'
-                  ? " (none published): showing the backend's sample layout."
-                  : " (none published): the browser's own player."}
-              {answer.trackingId && source !== 'server' ? ` tracking_id ${answer.trackingId}` : ''}
+          {/* Which player config was used (the address asked and what it answered): a small note over the corner. */}
+          <div style={{ position: 'absolute', top: 4, left: 8, zIndex: 20, fontSize: 12, color: '#9aa0ae' }}>
+            {answer && (
+              <div role="note">
+                Player config: <code>{answer.url}</code> answered {answer.status || 'nothing'}
+                {source === 'server'
+                  ? ''
+                  : source === 'sample'
+                    ? " (none published): showing the backend's sample layout."
+                    : " (none published): the browser's own player."}
+                {answer.trackingId && source !== 'server' ? ` tracking_id ${answer.trackingId}` : ''}
+              </div>
+            )}
+            {!src && <div role="note">This title has no video address in the delivery API yet.</div>}
+          </div>
+          {toast && (
+            <div
+              role="status"
+              style={{
+                position: 'absolute',
+                bottom: 24,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 30,
+                padding: '10px 16px',
+                borderRadius: 8,
+                background: '#1e2330',
+                color: '#ffffff',
+                fontSize: 14,
+              }}
+            >
+              {toast.text}
             </div>
           )}
-          {!src && <div role="note">This title has no stream address in the delivery API yet.</div>}
-          <div ref={surfaceRef} style={{ position: 'relative', width: W, height: H, margin: '0 auto' }}>
+          <div ref={surfaceRef} style={{ position: 'relative', width: W, height: H }}>
             <video
               ref={setVideo}
               src={src}
@@ -99,7 +142,18 @@ export function PlayerScreen() {
                 objectFit: 'contain',
                 background: '#000',
               }}
-            />
+            >
+              {offer.subtitleFiles.map((t) => (
+                <track
+                  key={t.id}
+                  id={t.id}
+                  kind="subtitles"
+                  srcLang={t.language}
+                  label={t.label}
+                  src={t.src}
+                />
+              ))}
+            </video>
             {config && W > 0 && (
               <PlayerControls
                 config={config}
@@ -110,6 +164,7 @@ export function PlayerScreen() {
                 width={W}
                 height={H}
                 surfaceRef={surfaceRef}
+                stageRef={wrapRef}
                 video={video}
                 onBack={() => navigate(-1)}
                 onUnavailable={unavailable}
