@@ -549,4 +549,34 @@ export interface Page {
   rails: Rail[];
   /** Counts rows only (not the hero). More: call again with `start=nextStart`. */
   paging: { start: number | null; rows: number | null; total: number | null; nextStart: number | null };
+  /** The page a rail's "See all" opens. Absent on an older server: the client's own default is used. */
+  seeAllPage?: SeeAllPageDesign;
+}
+
+/** How the "See all" list page is drawn (lengths in the device's unit, already scaled). */
+export interface SeeAllPageDesign {
+  sidePadding: number;
+  topPadding: number;
+  bottomPadding: number;
+  /** The rail title's font size times this. */
+  titleScale: number;
+  titleGap: number;
+  titleMarginBottom: number;
+  /** Titles asked for per call. */
+  pageSize: number;
+  backButton: {
+    shape: 'circle' | 'square' | string;
+    size: number;
+    iconSize: number;
+    background: string | null;
+    color: string | null;
+  };
+  showMore: {
+    label: string;
+    shape: 'pill' | 'rounded' | string;
+    borderWidth: number;
+    paddingX: number;
+    paddingY: number;
+    marginTop: number;
+  };
 }

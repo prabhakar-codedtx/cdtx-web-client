@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '@/app/hooks';
 import { showToast } from '@/app/uiSlice';
 import { DETAIL_PAGES } from '@/lib/config';
-import type { Block, Rail, Title } from '@/lib/api/types';
+import type { Block, Fill, Rail, SeeAllPageDesign, Title } from '@/lib/api/types';
 
 /**
  * What a tap does. The JSON says which tap: a card uses `rail.tap.cards[title.id]`, else
@@ -68,7 +68,13 @@ export function useTitleActions() {
 
   /** A rail's "See all", as its `seeAll.tap` says: a link, nothing, or (the default) all of the rail's titles in a grid. */
   const seeAll = useCallback(
-    (rail: Rail, block: Block | null, slug: string | null) => {
+    (
+      rail: Rail,
+      block: Block | null,
+      slug: string | null,
+      background: Fill | null = null,
+      design: SeeAllPageDesign | null = null,
+    ) => {
       const tap = rail.seeAll.tap;
       if (tap?.type === 'none') return;
       if (tap?.type === 'link') {
@@ -80,7 +86,7 @@ export function useTitleActions() {
         return;
       }
       navigate(`/list/${encodeURIComponent(slug)}/${encodeURIComponent(rail.key)}`, {
-        state: { rail, block },
+        state: { rail, block, background, design },
       });
     },
     [navigate, dispatch],

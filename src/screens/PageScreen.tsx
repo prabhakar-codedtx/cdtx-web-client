@@ -57,7 +57,15 @@ export function PageScreen({ page, contentId }: { page: Page; contentId?: string
                 blocks={blocks}
                 onOpen={open}
                 onAction={act}
-                onSeeAll={(r) => seeAll(r, r.blockKey ? (blocks[r.blockKey] ?? null) : null, page.slug)}
+                onSeeAll={(r) =>
+                  seeAll(
+                    r,
+                    r.blockKey ? (blocks[r.blockKey] ?? null) : null,
+                    page.slug,
+                    page.background,
+                    page.seeAllPage ?? null,
+                  )
+                }
               />
             </div>
           ),
