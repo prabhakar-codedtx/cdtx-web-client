@@ -20,12 +20,16 @@ import { usePlayerConfig } from '@/player/usePlayerConfig';
  * The delivery API has no stream address yet, so the stream is the title's `previewVideoUrl` when it
  * has one; without it the title's picture stands in and the controls drive an empty player.
  */
+/** Next episode is offered in the last this-many seconds; when the video ends the next one starts. */
+const UP_NEXT_SECONDS = 20;
+
 export function PlayerScreen() {
   const { id } = useParams<{ type: string; id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const fromState = (location.state as { title?: Title } | null)?.title ?? null;
+  const arrived = location.state as { title?: Title | null; autoplay?: boolean } | null;
+  const fromState = arrived?.title ?? null;
   // Opened from a link or a reload: the title, if a rail has already brought it.
   const fromStore = useAppSelector((s) => {
     for (const e of Object.values(s.pages.items)) {
@@ -56,15 +60,30 @@ export function PlayerScreen() {
   const W = available;
   const H = viewportH;
 
+  // Skip intro: only while the video is inside the intro (pressed, it jumps to its end and goes).
+  // Next episode: only in the last UP_NEXT_SECONDS, by the video's own length (not the title's
+  // `durationSeconds`, which may not be the stream's).
+  const { intro, next } = offer;
+  const inIntro = intro !== null && own.time >= intro.start && own.time < intro.end;
+  const length = video && Number.isFinite(video.duration) ? video.duration : 0;
+  const upNext = next !== null && length > 0 && length - own.time <= UP_NEXT_SECONDS;
   const facts = useMemo<PlayerFacts>(
     () => ({
-      introMarkers: offer.ready ? offer.facts.introMarkers : demo,
-      hasNext: offer.ready ? offer.facts.hasNext : demo,
+      introMarkers: offer.ready ? inIntro : demo,
+      hasNext: offer.ready ? upNext : demo,
       hasEpisodes: offer.ready ? offer.facts.hasEpisodes : demo,
       hasAudioTracks: media.audioOptions.length > 1,
       hasSubtitles: media.subtitleOptions.length > 0,
     }),
-    [demo, offer.ready, offer.facts, media.audioOptions.length, media.subtitleOptions.length],
+    [
+      demo,
+      offer.ready,
+      inIntro,
+      upNext,
+      offer.facts,
+      media.audioOptions.length,
+      media.subtitleOptions.length,
+    ],
   );
   const unavailable = useCallback(
     (what: string) => dispatch(showToast(`"${what}" is not available yet.`)),
@@ -117,9 +136,14 @@ export function PlayerScreen() {
           )}
           <div ref={surfaceRef} style={{ position: 'relative', width: W, height: H }}>
             <video
+              // A new element for every title: the next episode starts from its own beginning (and
+              // `autoPlay` applies) even when it has the same stream address as the one that ended.
+              key={id}
               ref={setVideo}
               src={src}
               poster={poster}
+              // Opened by Next episode (pressed, or the last one ended): it plays straight away.
+              autoPlay={Boolean(arrived?.autoplay)}
               playsInline
               // No published layout: the browser's own controls.
               controls={!config}

@@ -139,7 +139,18 @@ export interface Title {
   watchProgress?: number | null;
   timeLeftLabel?: string | null;
   resumeSeconds?: number | null;
+  /** Only on a title asked for by id: whether an episode follows this one (the next in its season,
+   * else the first of the next season), and which. Absent on an older server. */
+  hasNextEpisode?: boolean;
+  nextEpisode?: NextEpisode | null;
   [key: string]: unknown;
+}
+
+/** The episode the player goes on to (`Title.nextEpisode`). */
+export interface NextEpisode {
+  id: string;
+  title: string | null;
+  episodeLabel: string | null;
 }
 
 // ---- shared shapes ---------------------------------------------------------------------------

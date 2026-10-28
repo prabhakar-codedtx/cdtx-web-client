@@ -42,7 +42,19 @@ export interface PlayerFacts {
 }
 
 /** Controls whose words change while playing: drawn with their `look`, the words replaced. */
-const LABELS = new Set(['title', 'elapsed', 'remaining', 'time', 'adLabel', 'adCountdown', 'skipIntro']);
+const LABELS = new Set([
+  'title',
+  'elapsed',
+  'remaining',
+  'time',
+  'adLabel',
+  'adCountdown',
+  'skipIntro',
+  'nextEpisode',
+]);
+/** Controls that stay on screen while the others fade out: they are only drawn for a few seconds
+ * (Skip intro during the intro, Next episode at the end) and are there to be pressed. */
+const STAY = new Set(['skipIntro', 'nextEpisode']);
 /** Controls that show something and do nothing when pressed. */
 const PASSIVE = new Set(['title', 'elapsed', 'remaining', 'time', 'adLabel', 'adCountdown']);
 
@@ -390,6 +402,11 @@ export function PlayerControls({
         return clock(media.duration - media.time, c.config?.format as string | undefined);
       case 'skipIntro':
         return typeof c.config?.label === 'string' ? c.config.label : 'Skip Intro';
+      case 'nextEpisode': {
+        // The countdown to the next episode: it starts by itself when this one ends.
+        const left = Math.max(0, Math.ceil(media.duration - media.time));
+        return `Next episode in ${left}s`;
+      }
       default:
         return '';
     }
@@ -407,7 +424,7 @@ export function PlayerControls({
       case 'back':
         return 'Back';
       case 'nextEpisode':
-        return 'Next episode';
+        return words(c);
       case 'episodes':
         return 'Episodes';
       case 'quality':
@@ -438,6 +455,12 @@ export function PlayerControls({
   };
 
   const visible = !idle || !media.playing || Boolean(open);
+  // The controls fade out when idle (and are out of the tab order once gone); `STAY` ones do not.
+  const fade: CSSProperties = {
+    visibility: visible ? 'visible' : 'hidden',
+    opacity: visible ? 1 : 0,
+    transition: visible ? 'opacity 0.15s ease' : 'opacity 0.3s ease, visibility 0s linear 0.3s',
+  };
   const ctx: PartCtx = { title, fit: k, cardW: W, aspect: null };
   const target = b.minTarget * k;
 
@@ -602,15 +625,17 @@ export function PlayerControls({
         top: safeY,
         width: SW,
         height: SH,
-        // The controls fade out when idle (and are out of the tab order once gone).
-        visibility: visible ? 'visible' : 'hidden',
-        opacity: visible ? 1 : 0,
-        transition: visible ? 'opacity 0.15s ease' : 'opacity 0.3s ease, visibility 0s linear 0.3s',
+        // Faded out, the layer lets the pointer through to the picture (a `STAY` control takes it back).
+        pointerEvents: visible ? undefined : 'none',
       }}
     >
       <style>{FEEDBACK_CSS}</style>
       {shown.map((c) => (
-        <div key={c.id} data-control={c.id} style={place(c)}>
+        <div
+          key={c.id}
+          data-control={c.id}
+          style={{ ...place(c), ...(STAY.has(c.id) ? { pointerEvents: 'auto' } : fade) }}
+        >
           {content(c)}
         </div>
       ))}
@@ -622,6 +647,7 @@ export function PlayerControls({
           aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
           onClick={toggleFullscreen}
           style={{
+            ...fade,
             position: 'absolute',
             top: 12 * k,
             right: 12 * k,
