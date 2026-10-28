@@ -111,10 +111,6 @@ export function PlayerScreen() {
         <div style={{ color: '#fff' }}>Loading…</div>
       ) : (
         <>
-          {/* A note over the corner when the title has no video address. */}
-          <div style={{ position: 'absolute', top: 4, left: 8, zIndex: 20, fontSize: 12, color: '#9aa0ae' }}>
-            {!src && <div role="note">This title has no video address in the delivery API yet.</div>}
-          </div>
           {toast && (
             <div
               role="status"
