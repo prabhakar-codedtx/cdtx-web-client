@@ -1,5 +1,5 @@
 import { http } from '@/lib/api/client';
-import { API_BASE, PRODUCT } from '@/lib/config';
+import { API_BASE, DETAIL_PAGES, PRODUCT } from '@/lib/config';
 import type { PlayerConfig } from '@/lib/api/player';
 import type { DeliveryContext, Envelope, LaunchConfig, NavPage, Page, Theme, Title } from '@/lib/api/types';
 
@@ -7,6 +7,11 @@ import type { DeliveryContext, Envelope, LaunchConfig, NavPage, Page, Theme, Tit
 export interface Launch {
   pagesURL: string;
   pageURL: string;
+  /**
+   * Every title's detail screen, whatever its type: `…/detail?contentId={content_id}`. The server
+   * picks the page for the title's type. Null on an older server (then `DETAIL_PAGES` names them).
+   */
+  detailURL: string | null;
   /** The Design System for this device, `?dt=&v=` filled in by the server; null when not sent. */
   designSystemURL: string | null;
   railItemLimit: number;
@@ -62,6 +67,7 @@ export async function getLaunch(ctx: DeliveryContext): Promise<Launch> {
   return {
     pagesURL: text('pagesURL'),
     pageURL: text('pageURL'),
+    detailURL: typeof byKey.detailURL === 'string' ? text('detailURL') : null,
     designSystemURL: typeof byKey.designSystemURL === 'string' ? text('designSystemURL') : null,
     railItemLimit: typeof byKey.railItemLimit === 'number' ? byKey.railItemLimit : 10,
     forceUpdate: byKey.forceUpdate === true,
@@ -124,6 +130,37 @@ export async function getPage(
   if (!page) throw new Error('Page not found');
   return page;
 }
+
+/** The screen key of a title's detail screen (its page is picked by the server, not named here). */
+export const DETAIL_SCREEN = 'detail';
+
+/**
+ * Call 3 for a detail screen: the title's detail page, by the title alone (`detailURL`). The server
+ * picks the page for the title's type and marks each rail `visible` for it. An older server without
+ * `detailURL`: the page named for the type in `DETAIL_PAGES`. Null: no detail page for this type.
+ */
+export async function getDetailPage(
+  launch: Launch,
+  contentId: string,
+  type: string | undefined,
+  ctx: DeliveryContext,
+  opts: { start?: number } = {},
+): Promise<Page | null> {
+  if (!launch.detailURL) {
+    const slug = type ? DETAIL_PAGES[type] : undefined;
+    return slug ? getPage(launch, slug, ctx, { contentId, ...opts }) : null;
+  }
+  const { data } = await http.get<Envelope<Page>>(path(fill(launch.detailURL, { content_id: contentId })), {
+    params: { ...ctx, ...opts },
+  });
+  const page = data.data[0];
+  if (!page) throw new Error('Page not found');
+  return page;
+}
+
+/** Whether a title of this type has a detail screen (every type does when the server sends `detailURL`). */
+export const hasDetailPage = (launch: Launch | null, type: string | null | undefined): boolean =>
+  !!launch?.detailURL || !!(type && DETAIL_PAGES[type]);
 
 const PLAYER_KEY = 'cdtx.playerConfig';
 

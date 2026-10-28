@@ -1,13 +1,16 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import { getPage, getRailItems } from '@/lib/api/endpoints';
+import { DETAIL_SCREEN, getDetailPage, getPage, getRailItems } from '@/lib/api/endpoints';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { ApiError } from '@/lib/api/client';
 import type { Page, Title } from '@/lib/api/types';
 import type { RootState } from '@/app/store';
 
 export interface PageRequest {
+  /** A tab's slug, or `DETAIL_SCREEN` for a title's detail screen (with `contentId`). */
   slug: string;
   contentId?: string;
+  /** A detail screen: the title's type, for an older server that names a page per type. */
+  type?: string;
 }
 
 /** One page is one request key: the screen, the title it is opened for, and the device it was asked as. */
@@ -44,6 +47,12 @@ export const loadPage = createAsyncThunk<
     if (!launch) return rejectWithValue({ error: 'Not started', code: null });
     const ctx = getDeliveryContext();
     try {
+      if (req.slug === DETAIL_SCREEN && req.contentId) {
+        const page = await getDetailPage(launch, req.contentId, req.type, ctx);
+        if (!page)
+          return rejectWithValue({ error: 'There is no detail page for this kind of title.', code: 404 });
+        return { key: pageKey(req.slug, req.contentId, ctx.dt), page };
+      }
       return {
         key: pageKey(req.slug, req.contentId, ctx.dt),
         page: await getPage(launch, req.slug, ctx, { contentId: req.contentId }),

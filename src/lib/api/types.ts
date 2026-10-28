@@ -491,6 +491,9 @@ export interface Rail {
   railId: string | null;
   title: string | null;
   layout: 'hero' | 'carousel' | 'banner' | 'grid' | string | null;
+  /** Draw it or not. Every rail is sent; false = not shown for this type of title (a detail page's
+   * "Show for" in the CMS) or nothing to show. Absent on an older server: drawn. */
+  visible?: boolean;
   autoplay: boolean;
   background: Fill | null;
   titleStyle: TextStyle & { textStyle: string | null; hidden: boolean };
