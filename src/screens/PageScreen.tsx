@@ -6,7 +6,7 @@ import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { useInView } from '@/lib/device/useInView';
 import { fillCss, paddingCss } from '@/lib/render/paint';
 import { HeroBanner } from '@/screens/HeroBanner';
-import { NAV_HEIGHT } from '@/screens/navMetrics';
+import { NAV_HEIGHT, PAGE_BOTTOM_PADDING } from '@/screens/navMetrics';
 import { Rail } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
 
@@ -54,7 +54,14 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
 
   return (
     // The tab bar floats over the top: a screen that opens with a hero runs under it, any other starts below it.
-    <main style={{ ...fillCss(page.background), paddingTop: rails[0]?.layout === 'hero' ? 0 : NAV_HEIGHT }}>
+    // Room after the last rail, so it does not end flush against the window's bottom edge.
+    <main
+      style={{
+        ...fillCss(page.background),
+        paddingTop: rails[0]?.layout === 'hero' ? 0 : NAV_HEIGHT,
+        paddingBottom: PAGE_BOTTOM_PADDING,
+      }}
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: sp.railGap ?? 0 }}>
         {rails.map((rail) =>
           rail.layout === 'hero' ? (
