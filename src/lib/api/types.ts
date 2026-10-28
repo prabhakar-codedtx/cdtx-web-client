@@ -134,7 +134,23 @@ export interface Title {
   entitlements: unknown;
   /** Only on a title asked for by id (`GET /v1/content/{id}`), not on a rail's titles. */
   playback?: Playback;
+  /** The viewer's progress (a Continue Watching title, or one asked for by id): 0-1, "12m left", and
+   * where Play resumes. Null otherwise; absent on an older server. */
+  watchProgress?: number | null;
+  timeLeftLabel?: string | null;
+  resumeSeconds?: number | null;
+  /** Only on a title asked for by id: whether an episode follows this one (the next in its season,
+   * else the first of the next season), and which. Absent on an older server. */
+  hasNextEpisode?: boolean;
+  nextEpisode?: NextEpisode | null;
   [key: string]: unknown;
+}
+
+/** The episode the player goes on to (`Title.nextEpisode`). */
+export interface NextEpisode {
+  id: string;
+  title: string | null;
+  episodeLabel: string | null;
 }
 
 // ---- shared shapes ---------------------------------------------------------------------------

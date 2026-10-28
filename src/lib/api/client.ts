@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { profileId } from '@/lib/api/profile';
 import { createLogger } from '@/lib/logger/logger';
 import type { Envelope } from '@/lib/api/types';
 
@@ -38,6 +39,8 @@ http.interceptors.request.use((config) => {
   // Stashed on the config so the response interceptor can compute duration
   // without a second map keyed by request — axios passes this object through.
   (config as { _startedAt?: number })._startedAt = start;
+  // The viewer (Continue Watching): a header, never in the URL.
+  config.headers.set('X-Profile-Id', profileId());
   log.debug(`→ ${config.method?.toUpperCase()} ${config.url}`);
   return config;
 });

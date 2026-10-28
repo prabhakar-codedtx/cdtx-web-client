@@ -35,6 +35,8 @@ export function path(url: string): string {
 
 /** The origin the API's own addresses start with (read from the launch config). */
 let apiOrigin: string | null = null;
+/** Where the player reports progress (`progressURL`, `…/progress/{content_id}`). */
+let progressUrl = '/v1/progress/{content_id}';
 
 /**
  * A file the API hands out (an icon): drawn through the same origin as the API's calls, so a
@@ -58,6 +60,7 @@ export async function getLaunch(ctx: DeliveryContext): Promise<Launch> {
   const byKey = Object.fromEntries(data.config.map((s) => [s.key, s.value]));
   if (typeof byKey.pagesURL === 'string' && /^https?:\/\//i.test(byKey.pagesURL))
     apiOrigin = new URL(byKey.pagesURL).origin;
+  if (typeof byKey.progressURL === 'string') progressUrl = byKey.progressURL;
   const text = (key: string): string => {
     const v = byKey[key];
     if (typeof v !== 'string') throw new Error(`The launch config has no ${key}`);
@@ -242,6 +245,27 @@ export async function getRailItems(contentUrl: string): Promise<Title[]> {
 export async function getTitle(id: string, ctx: DeliveryContext): Promise<Title | null> {
   const { data } = await http.get<Envelope<Title>>(`/v1/content/${encodeURIComponent(id)}`, { params: ctx });
   return data.data[0] ?? null;
+}
+
+/**
+ * Where the viewer is in a title (the player, as it plays). The server keeps it by the viewer's
+ * profile (`X-Profile-Id`, added by `client.ts`); near the end the title counts as finished and
+ * leaves Continue Watching. A failure is dropped: the next report carries the position anyway.
+ */
+export async function putProgress(
+  id: string,
+  positionSeconds: number,
+  durationSeconds?: number,
+): Promise<void> {
+  const position = Math.max(0, Math.floor(positionSeconds));
+  const duration =
+    durationSeconds && Number.isFinite(durationSeconds) ? Math.floor(durationSeconds) : undefined;
+  await http
+    .put(path(fill(progressUrl, { content_id: id })), {
+      positionSeconds: position,
+      ...(duration && duration > 0 ? { durationSeconds: duration } : {}),
+    })
+    .catch(() => undefined);
 }
 
 /** The episodes of the season (or series) the title belongs to, in order; an episode gets its season's. */

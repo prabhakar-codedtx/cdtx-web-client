@@ -140,8 +140,10 @@ function layerView(layer: Layer, i: number, ctx: PartCtx, focusColor: string | n
   }
   if (layer.type === 'slider' && layer.slider) {
     const s = layer.slider;
-    // 0-1; a value above 1 is a percent (known data issue).
-    const v = s.value ?? 0;
+    // Bound (`bind`, e.g. `watchProgress`): the title's own value; else the designed one. 0-1; a value
+    // above 1 is a percent (known data issue).
+    const bound = layer.bind ? ctx.title?.[layer.bind] : undefined;
+    const v = typeof bound === 'number' ? bound : (s.value ?? 0);
     const frac = Math.max(0, Math.min(1, v > 1 ? v / 100 : v));
     const corner = times(s.cornerRadius, k);
     return (

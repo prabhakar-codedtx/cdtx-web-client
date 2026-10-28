@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getEpisodes, getTitle, path } from '@/lib/api/endpoints';
-import type { Title } from '@/lib/api/types';
+import { getEpisodes, getTitle, path, putProgress } from '@/lib/api/endpoints';
+import type { NextEpisode, Title } from '@/lib/api/types';
 import { LOCALE, REGION } from '@/lib/config';
 import { useDt } from '@/lib/device/useDt';
 import type { Media, Option } from '@/player/useMedia';
@@ -24,6 +24,12 @@ export interface TitlePlayback {
   /** The id of the subtitle shown (the `<track>` to switch on); null: off. */
   subtitleId: string | null;
   facts: { introMarkers: boolean; hasNext: boolean; hasEpisodes: boolean };
+  /** The opening credits (seconds): Skip intro is shown while the video is between them. */
+  intro: { start: number; end: number } | null;
+  /** The episode that follows (`nextEpisode`, else the next in the season list); null for the last. */
+  next: NextEpisode | null;
+  /** Open the next episode, playing. */
+  goNext: () => void;
   /** What the controls offer, from the title: merged over the `<video>`'s own state by the screen. */
   extend: (media: Media) => Media;
 }
@@ -108,6 +114,44 @@ export function useTitlePlayback(
     return () => video.removeEventListener('loadedmetadata', carryOn);
   }, [video, src]);
 
+  // Where the viewer stopped last time (`resumeSeconds`, from the server): the first stream starts there.
+  const resumedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const at = title?.resumeSeconds;
+    if (!video || !id || !at || resumedFor.current === id) return;
+    const seek = () => {
+      if (resumedFor.current === id) return;
+      resumedFor.current = id;
+      video.currentTime = at;
+    };
+    // Already loaded: seek once the browser is free (a callback, like a new stream's carry-on).
+    const soon = video.readyState >= 1 ? window.setTimeout(seek, 0) : undefined;
+    video.addEventListener('loadedmetadata', seek, { once: true });
+    return () => {
+      window.clearTimeout(soon);
+      video.removeEventListener('loadedmetadata', seek);
+    };
+  }, [video, id, title?.resumeSeconds]);
+
+  // How far the viewer got, for Continue Watching: every 10 s while playing, on pause, and on leaving.
+  useEffect(() => {
+    if (!video || !id) return;
+    const report = () => {
+      if (video.currentTime > 0) void putProgress(id, video.currentTime, video.duration);
+    };
+    const every = window.setInterval(() => {
+      if (!video.paused) report();
+    }, 10_000);
+    video.addEventListener('pause', report);
+    video.addEventListener('ended', report);
+    return () => {
+      window.clearInterval(every);
+      video.removeEventListener('pause', report);
+      video.removeEventListener('ended', report);
+      report();
+    };
+  }, [video, id]);
+
   // The `<track>` of the chosen subtitle is shown, the others hidden.
   useEffect(() => {
     if (!video) return;
@@ -119,10 +163,32 @@ export function useTitlePlayback(
     return () => video.textTracks.removeEventListener?.('addtrack', apply);
   }, [video, subtitleId, subtitleFiles]);
 
+  // The episode that follows: the server's answer (`nextEpisode`), else the next in this season's list.
   const index = episodes.findIndex((e) => e.id === id);
-  const next = index >= 0 ? episodes[index + 1] : undefined;
-  const play = (e: Title) =>
-    navigate(`/play/${e.type ?? 'episode'}/${e.id}`, { replace: true, state: { title: e } });
+  const listed = index >= 0 ? episodes[index + 1] : undefined;
+  const next = useMemo<NextEpisode | null>(() => {
+    if (title?.hasNextEpisode !== undefined) return title.nextEpisode ?? null;
+    return listed ? { id: listed.id, title: listed.title, episodeLabel: listed.episodeLabel } : null;
+  }, [title, listed]);
+  // Another title starts playing (`autoplay`): it was asked for from the player, not opened afresh.
+  const play = useCallback(
+    (eid: string, type?: string | null) =>
+      navigate(`/play/${type ?? 'episode'}/${eid}`, {
+        replace: true,
+        state: { title: episodes.find((x) => x.id === eid) ?? null, autoplay: true },
+      }),
+    [navigate, episodes],
+  );
+  const goNext = () => (next ? play(next.id) : say('This is the last episode.'));
+
+  // The video ended: the next episode starts by itself.
+  const nextId = next?.id ?? null;
+  useEffect(() => {
+    if (!video || !nextId) return;
+    const ended = () => play(nextId);
+    video.addEventListener('ended', ended);
+    return () => video.removeEventListener('ended', ended);
+  }, [video, nextId, play]);
 
   const extend = (media: Media): Media => {
     const keep = () => {
@@ -174,11 +240,11 @@ export function useTitlePlayback(
       },
       pickEpisode: (eid) => {
         const e = episodes.find((x) => x.id === eid);
-        if (e && e.id !== id) play(e);
+        if (e && e.id !== id) play(e.id, e.type);
       },
       demo: {
         skipIntro: () => intro && media.seekTo(intro.end),
-        nextEpisode: () => (next ? play(next) : say('This is the last episode.')),
+        nextEpisode: goNext,
       },
     };
   };
@@ -189,7 +255,10 @@ export function useTitlePlayback(
     src,
     subtitleFiles,
     subtitleId,
-    facts: { introMarkers: intro !== null, hasNext: next !== undefined, hasEpisodes: episodes.length > 1 },
+    facts: { introMarkers: intro !== null, hasNext: next !== null, hasEpisodes: episodes.length > 1 },
+    intro,
+    next,
+    goNext,
     extend,
   };
 }
