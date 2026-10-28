@@ -2,24 +2,26 @@ import { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loadPage, pageKey } from '@/app/pagesSlice';
-import { DETAIL_PAGES } from '@/lib/config';
+import { DETAIL_SCREEN } from '@/lib/api/endpoints';
 import { useDt } from '@/lib/device/useDt';
 import { PageScreen } from '@/screens/PageScreen';
 
 /** A screen by its slug (and the title it is opened for, on a detail screen). */
-function Screen({ slug, contentId }: { slug: string | undefined; contentId?: string }) {
+function Screen({ slug, contentId, type }: { slug: string | undefined; contentId?: string; type?: string }) {
   const dispatch = useAppDispatch();
   const dt = useDt();
   const entry = useAppSelector((s) => (slug ? s.pages.pages[pageKey(slug, contentId, dt)] : undefined));
 
   // Asked for again on every visit: what was published since reaches the next one.
   useEffect(() => {
-    if (slug) void dispatch(loadPage({ slug, contentId }));
-  }, [slug, contentId, dt, dispatch]);
+    if (slug) void dispatch(loadPage({ slug, contentId, type }));
+  }, [slug, contentId, type, dt, dispatch]);
 
   if (!slug) return <div>There is nothing to show yet.</div>;
   if (entry?.data)
-    return <PageScreen key={`${slug}|${contentId ?? ''}`} page={entry.data} contentId={contentId} />;
+    return (
+      <PageScreen key={`${slug}|${contentId ?? ''}`} screen={slug} page={entry.data} contentId={contentId} />
+    );
   if (entry?.status === 'failed') {
     return (
       <div role="alert">
@@ -41,17 +43,19 @@ export function TabRoute() {
   return <Screen slug={slug ?? (tabs.find((t) => t.isDefault) ?? tabs[0])?.slug} />;
 }
 
-/** `/title/:type/:id`: the detail screen for that kind of title, opened for that title. */
+/**
+ * `/title/:type/:id`: the title's detail screen. The server picks the page for the title's type
+ * (`detailURL`) and says which of its rails are `visible` for it; `type` is only for an older server.
+ */
 export function DetailRoute() {
   const { type, id } = useParams<{ type: string; id: string }>();
-  const slug = type ? DETAIL_PAGES[type] : undefined;
-  if (!slug || !id) {
+  if (!id) {
     return (
       <div>
-        <strong>There is no detail page for this kind of title.</strong>
+        <strong>There is no detail page for this title.</strong>
         <Link to="/">Back to the start</Link>
       </div>
     );
   }
-  return <Screen slug={slug} contentId={id} />;
+  return <Screen slug={DETAIL_SCREEN} contentId={id} type={type} />;
 }

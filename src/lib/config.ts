@@ -13,9 +13,9 @@ export const REGION = import.meta.env.VITE_DEFAULT_REGION || 'in';
 export const LOCALE = import.meta.env.VITE_DEFAULT_LOCALE || 'en';
 
 /**
- * Which detail page opens for which kind of title. The API has no list of detail pages (they are
- * not tabs), so this is the one piece of routing the client is told: `VITE_DETAIL_PAGES` as JSON,
- * for example `{"movie":"detail-movie","series":"detail-series"}`. Kinds not listed have no detail page.
+ * Only for an older server, without `detailURL` in its launch config: which detail page opens for
+ * which kind of title (`VITE_DETAIL_PAGES` as JSON, e.g. `{"movie":"detail-movie"}`). A server with
+ * `detailURL` picks the page itself from the title (`getDetailPage`), for every kind of title.
  */
 export const DETAIL_PAGES: Record<string, string> = (() => {
   const fallback = {

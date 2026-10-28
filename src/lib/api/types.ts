@@ -491,6 +491,9 @@ export interface Rail {
   railId: string | null;
   title: string | null;
   layout: 'hero' | 'carousel' | 'banner' | 'grid' | string | null;
+  /** Draw it or not. Every rail is sent; false = not shown for this type of title (a detail page's
+   * "Show for" in the CMS) or nothing to show. Absent on an older server: drawn. */
+  visible?: boolean;
   autoplay: boolean;
   background: Fill | null;
   titleStyle: TextStyle & { textStyle: string | null; hidden: boolean };
@@ -543,7 +546,8 @@ export interface Page {
   device: { dt: string | null; deviceClass: string | null; unit: string | null; unitScale: number | null };
   /** Always set; behind everything. */
   background: Fill;
-  spacing: { railGap: number | null; railPadding: Sides };
+  /** `pageBottom`: room below the last rail (the CMS's Spacing panel). Absent on an older server. */
+  spacing: { railGap: number | null; railPadding: Sides; pageBottom?: number | null };
   blocks: Record<string, Block>;
   /** In screen order: the hero first (`layout: hero`), then the rows. */
   rails: Rail[];

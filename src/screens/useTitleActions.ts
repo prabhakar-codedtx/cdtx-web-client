@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppDispatch } from '@/app/hooks';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { showToast } from '@/app/uiSlice';
-import { DETAIL_PAGES } from '@/lib/config';
+import { hasDetailPage } from '@/lib/api/endpoints';
 import type { Block, Fill, Rail, SeeAllPageDesign, Title } from '@/lib/api/types';
 
 /**
@@ -14,17 +14,18 @@ import type { Block, Fill, Rail, SeeAllPageDesign, Title } from '@/lib/api/types
 export function useTitleActions() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const launch = useAppSelector((s) => s.launch.launch);
 
+  // Every type has a detail screen when the server sends `detailURL`; an older server names some.
   const detail = useCallback(
     (title: Title) => {
-      const type = title.type ?? '';
-      if (!DETAIL_PAGES[type]) {
-        dispatch(showToast(`There is no detail page for ${type || 'this title'} yet.`));
+      if (!hasDetailPage(launch, title.type)) {
+        dispatch(showToast(`There is no detail page for ${title.type || 'this title'} yet.`));
         return;
       }
-      navigate(`/title/${type}/${title.id}`);
+      navigate(`/title/${encodeURIComponent(title.type ?? 'title')}/${title.id}`);
     },
-    [navigate, dispatch],
+    [navigate, dispatch, launch],
   );
 
   const act = useCallback(
