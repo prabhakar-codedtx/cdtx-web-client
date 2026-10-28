@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getEpisodes, getTitle, path } from '@/lib/api/endpoints';
+import { getEpisodes, getTitle, path, putProgress } from '@/lib/api/endpoints';
 import type { Title } from '@/lib/api/types';
 import { LOCALE, REGION } from '@/lib/config';
 import { useDt } from '@/lib/device/useDt';
@@ -107,6 +107,44 @@ export function useTitlePlayback(
     video.addEventListener('loadedmetadata', carryOn, { once: true });
     return () => video.removeEventListener('loadedmetadata', carryOn);
   }, [video, src]);
+
+  // Where the viewer stopped last time (`resumeSeconds`, from the server): the first stream starts there.
+  const resumedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const at = title?.resumeSeconds;
+    if (!video || !id || !at || resumedFor.current === id) return;
+    const seek = () => {
+      if (resumedFor.current === id) return;
+      resumedFor.current = id;
+      video.currentTime = at;
+    };
+    // Already loaded: seek once the browser is free (a callback, like a new stream's carry-on).
+    const soon = video.readyState >= 1 ? window.setTimeout(seek, 0) : undefined;
+    video.addEventListener('loadedmetadata', seek, { once: true });
+    return () => {
+      window.clearTimeout(soon);
+      video.removeEventListener('loadedmetadata', seek);
+    };
+  }, [video, id, title?.resumeSeconds]);
+
+  // How far the viewer got, for Continue Watching: every 10 s while playing, on pause, and on leaving.
+  useEffect(() => {
+    if (!video || !id) return;
+    const report = () => {
+      if (video.currentTime > 0) void putProgress(id, video.currentTime, video.duration);
+    };
+    const every = window.setInterval(() => {
+      if (!video.paused) report();
+    }, 10_000);
+    video.addEventListener('pause', report);
+    video.addEventListener('ended', report);
+    return () => {
+      window.clearInterval(every);
+      video.removeEventListener('pause', report);
+      video.removeEventListener('ended', report);
+      report();
+    };
+  }, [video, id]);
 
   // The `<track>` of the chosen subtitle is shown, the others hidden.
   useEffect(() => {
