@@ -256,16 +256,18 @@ export async function putProgress(
   id: string,
   positionSeconds: number,
   durationSeconds?: number,
-): Promise<void> {
+): Promise<boolean> {
   const position = Math.max(0, Math.floor(positionSeconds));
   const duration =
     durationSeconds && Number.isFinite(durationSeconds) ? Math.floor(durationSeconds) : undefined;
-  await http
+  // Whether it was kept (a failed report is dropped: the next one, 10 s later, carries the same).
+  return http
     .put(path(fill(progressUrl, { content_id: id })), {
       positionSeconds: position,
       ...(duration && duration > 0 ? { durationSeconds: duration } : {}),
     })
-    .catch(() => undefined);
+    .then(() => true)
+    .catch(() => false);
 }
 
 /** The episodes of the season (or series) the title belongs to, in order; an episode gets its season's. */

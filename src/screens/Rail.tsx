@@ -123,10 +123,12 @@ export function Rail({
   const url = rail.source.contentUrl ?? '';
   const hasTitles = (rail.source.count ?? 0) > 0;
   const entry = useAppSelector((s) => s.pages.items[url]);
+  // No titles held: never asked, or dropped since (the viewer's own rails, after they watched).
+  const missing = !entry;
 
   useEffect(() => {
-    if (inView && url && hasTitles) void dispatch(loadItems(url));
-  }, [inView, url, hasTitles, dispatch]);
+    if (inView && url && hasTitles && missing) void dispatch(loadItems(url));
+  }, [inView, url, hasTitles, missing, dispatch]);
 
   // Nothing to show (`count` 0, no design), or titles that came back empty or failed: no room taken.
   if (!hasTitles || !block) return null;

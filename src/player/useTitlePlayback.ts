@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAppDispatch } from '@/app/hooks';
+import { viewerChanged } from '@/app/pagesSlice';
 import { getEpisodes, getTitle, path, putProgress } from '@/lib/api/endpoints';
 import type { NextEpisode, Title } from '@/lib/api/types';
 import { LOCALE, REGION } from '@/lib/config';
@@ -48,6 +50,7 @@ export function useTitlePlayback(
 ): TitlePlayback {
   const dt = useDt();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   // What arrived and what was chosen belong to one title: another title starts again from nothing.
   const [loaded, setLoaded] = useState<{ id: string; title: Title | null; episodes: Title[] } | null>(null);
   const [choice, setChoice] = useState<{
@@ -137,7 +140,11 @@ export function useTitlePlayback(
   useEffect(() => {
     if (!video || !id) return;
     const report = () => {
-      if (video.currentTime > 0) void putProgress(id, video.currentTime, video.duration);
+      if (video.currentTime <= 0) return;
+      // Once kept, Continue Watching is asked for again (the next screen shows this title first).
+      void putProgress(id, video.currentTime, video.duration).then((kept) => {
+        if (kept) dispatch(viewerChanged());
+      });
     };
     const every = window.setInterval(() => {
       if (!video.paused) report();
@@ -150,7 +157,7 @@ export function useTitlePlayback(
       video.removeEventListener('ended', report);
       report();
     };
-  }, [video, id]);
+  }, [video, id, dispatch]);
 
   // The `<track>` of the chosen subtitle is shown, the others hidden.
   useEffect(() => {

@@ -28,7 +28,12 @@ interface Entry<T> {
 interface PagesState {
   pages: Record<string, Entry<Page>>;
   items: Record<string, Entry<Title[]>>;
+  /** Goes up each time the viewer's own progress is saved: a screen showing it asks again. */
+  viewerVersion: number;
 }
+
+/** Rail sources whose titles are the viewer's own (they change as the viewer watches). */
+export const VIEWER_SOURCES: ReadonlySet<string> = new Set(['continue_watching']);
 
 const failure = (e: unknown): { error: string; code: number | null } => ({
   error: e instanceof Error ? e.message : 'Failed',
@@ -84,8 +89,23 @@ export const loadItems = createAsyncThunk(
 
 const slice = createSlice({
   name: 'pages',
-  initialState: { pages: {}, items: {} } as PagesState,
-  reducers: {},
+  initialState: { pages: {}, items: {}, viewerVersion: 0 } as PagesState,
+  reducers: {
+    /**
+     * The viewer's progress was saved: the titles of the viewer's own rails (Continue Watching)
+     * are dropped, so they are asked for again when shown, and the pages are asked for again
+     * (a rail's count may have changed, e.g. 0 -> 1). Every other rail keeps its titles.
+     */
+    viewerChanged(s) {
+      s.viewerVersion += 1;
+      for (const entry of Object.values(s.pages)) {
+        for (const rail of entry.data?.rails ?? []) {
+          const url = rail.source?.contentUrl;
+          if (url && rail.source.type && VIEWER_SOURCES.has(rail.source.type)) delete s.items[url];
+        }
+      }
+    },
+  },
   extraReducers: (b) => {
     b.addCase(loadPage.pending, (s, a) => {
       const key = pageKey(a.meta.arg.slug, a.meta.arg.contentId, getDeliveryContext().dt);
@@ -113,5 +133,6 @@ const slice = createSlice({
   },
 });
 
+export const { viewerChanged } = slice.actions;
 export default slice.reducer;
 export type { PagesState, Entry };
