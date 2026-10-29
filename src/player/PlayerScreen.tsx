@@ -164,6 +164,55 @@ export function PlayerScreen() {
                 />
               ))}
             </video>
+            {/* Waiting for the video's data: a ring round the centre, so a pressed Play is never a
+                frozen 0:00 with no sign of life. Under the controls: the Play button stays on top. */}
+            {own.buffering && (
+              <div
+                role="status"
+                aria-label="Loading video"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                }}
+              >
+                <div
+                  style={{
+                    width: 132,
+                    height: 132,
+                    borderRadius: '50%',
+                    border: '4px solid rgba(255, 255, 255, 0.2)',
+                    borderTopColor: '#ffffff',
+                    animation: 'cdtx-spin 0.9s linear infinite',
+                  }}
+                />
+                <style>{'@keyframes cdtx-spin { to { transform: rotate(360deg); } }'}</style>
+              </div>
+            )}
+            {own.failed && (
+              <div
+                role="alert"
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '62%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 25,
+                  maxWidth: '80%',
+                  padding: '10px 16px',
+                  borderRadius: 8,
+                  background: 'rgba(0, 0, 0, 0.75)',
+                  color: '#ffffff',
+                  fontSize: 14,
+                  textAlign: 'center',
+                }}
+              >
+                {own.failed}
+              </div>
+            )}
             {config && W > 0 && (
               <PlayerControls
                 config={config}
