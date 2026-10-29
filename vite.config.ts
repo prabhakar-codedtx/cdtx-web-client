@@ -1,9 +1,16 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+// The API the dev server forwards /v1 and /image to: `VITE_PROXY_TARGET` in `.env` (or the shell),
+// else the production API. One setting, so every way of starting the client agrees.
+const PROD_API = 'https://3-109-241-147.sslip.io';
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const apiTarget = env.VITE_PROXY_TARGET || PROD_API;
+  return {
   plugins: [
     react(),
     // Makes the storefront installable — on a phone/tablet's "Add to Home
@@ -73,8 +80,9 @@ export default defineConfig({
     // same-origin so this works inside a sandboxed preview pane, not just a
     // normal browser tab.
     proxy: {
-      '/v1': { target: process.env.VITE_PROXY_TARGET || 'https://3-109-241-147.sslip.io', changeOrigin: true, secure: true },
-      '/image': { target: process.env.VITE_PROXY_TARGET || 'https://3-109-241-147.sslip.io', changeOrigin: true, secure: true },
+      '/v1': { target: apiTarget, changeOrigin: true, secure: true },
+      '/image': { target: apiTarget, changeOrigin: true, secure: true },
     },
   },
+  };
 });

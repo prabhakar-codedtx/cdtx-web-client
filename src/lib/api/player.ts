@@ -107,8 +107,9 @@ export interface PlayerConfig {
   behaviour: {
     input: 'pointer' | 'touch' | 'remote' | string;
     autoHideSeconds: number;
-    initialFocus: string | null;
-    focusOrder: string[];
+    initialFocus?: string | null;
+    /** The order focus moves in. Not sent by the server any more: then the controls' own order. */
+    focusOrder?: string[];
     seekStepSeconds: number;
     /** The step of Up and Down on the keyboard, in percent of the volume (default 10). */
     volumeStepPercent?: number;

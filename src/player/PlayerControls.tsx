@@ -302,7 +302,8 @@ export function PlayerControls({
         (!c.requires || (CAN[c.requires]?.() ?? false)) &&
         (!c.showWhen || Boolean(facts[c.showWhen as keyof PlayerFacts])),
     );
-    // The page order is the focus order, so Tab walks `behaviour.focusOrder`.
+    // The page order is the focus order, so Tab walks `behaviour.focusOrder`; without one (the
+    // server no longer sends it) the controls keep the order they came in.
     const order = b.focusOrder ?? [];
     const at = (c: Control) => {
       const i = order.indexOf(c.id);
