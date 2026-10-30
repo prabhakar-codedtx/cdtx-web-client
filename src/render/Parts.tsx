@@ -3,6 +3,7 @@ import type { Atom, IconFiles, Layer, Title } from '@/lib/api/types';
 import { assetUrl } from '@/lib/api/endpoints';
 import { imageSrc, metaSegments, shown, titleText } from '@/lib/render/fields';
 import { fillCss, objectFitCss, paddingCss, rgba, strokeCss, textCss } from '@/lib/render/paint';
+import { ExpandableText } from './ExpandableText';
 
 /**
  * The atoms a card is made of, each drawn only from its JSON (`atom.type`: text, box, meta, image).
@@ -132,8 +133,20 @@ function layerView(layer: Layer, i: number, ctx: PartCtx, focusColor: string | n
         : titleText(ctx.title, layer.bind)
       : (layer.staticText ?? '');
     if (!text) return null;
+    const look = { ...textCss(layer.text, k), ...(color ? { color } : {}) };
+    // A cut text the design lets open ("See more"), e.g. a description.
+    if (layer.text?.expandable && layer.text.maxLines)
+      return (
+        <ExpandableText
+          key={i}
+          text={text}
+          style={look}
+          moreLabel={layer.text.moreLabel || 'See more'}
+          lessLabel={layer.text.lessLabel || 'See less'}
+        />
+      );
     return (
-      <span key={i} style={{ ...textCss(layer.text, k), ...(color ? { color } : {}) }}>
+      <span key={i} style={look}>
         {text}
       </span>
     );
@@ -174,13 +187,20 @@ function layerView(layer: Layer, i: number, ctx: PartCtx, focusColor: string | n
 }
 
 /** The size `style.layout` gives an atom (its outer box), times `k`. */
+/** True when the atom holds a text that opens ("See more"): its box must grow with it. */
+const opens = (atom: Atom) =>
+  Boolean(atom.style.text?.expandable) || atom.style.layers.some((l) => l.type === 'text' && l.text?.expandable);
+
 function sizeCss(atom: Atom, k: number): CSSProperties {
   const l = atom.style.layout;
+  // A designed height is the least it takes when its text opens, so the text never spills over
+  // the parts under it: they move down instead.
+  const grows = opens(atom);
   const css: CSSProperties = {
     width: times(l.width, k),
-    height: times(l.height, k),
+    height: grows ? undefined : times(l.height, k),
     minWidth: times(l.minWidth, k),
-    minHeight: times(l.minHeight, k),
+    minHeight: grows ? (times(l.minHeight, k) ?? times(l.height, k)) : times(l.minHeight, k),
   };
   return Object.values(css).some((v) => v !== undefined) ? { ...css, boxSizing: 'border-box' } : {};
 }
@@ -262,10 +282,13 @@ function TextPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSP
     );
   const text = atomText(atom, ctx.title);
   if (!text) return null;
+  const t = atom.style.text;
+  // A cut text the design lets open ("See more"): the box keeps the look, the text inside is cut.
+  const opens = Boolean(t?.expandable && t.maxLines);
   return (
     <div
       style={{
-        ...textCss(atom.style.text, k),
+        ...textCss(opens && t ? { ...t, maxLines: null } : t, k),
         ...paddingCss(atom.style.layout.padding, k),
         ...sizeCss(atom, k),
         ...fillCss(atom.style.box.background),
@@ -274,7 +297,17 @@ function TextPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSP
         ...style,
       }}
     >
-      {text}
+      {opens && t ? (
+        <ExpandableText
+          block
+          text={text}
+          style={textCss(t, k)}
+          moreLabel={t.moreLabel || 'See more'}
+          lessLabel={t.lessLabel || 'See less'}
+        />
+      ) : (
+        text
+      )}
     </div>
   );
 }

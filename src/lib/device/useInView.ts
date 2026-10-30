@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * True once the element has entered the viewport (or come within
@@ -13,15 +13,17 @@ import { useEffect, useRef, useState } from 'react';
  * handful, which is also just how every real OTT app behaves — nobody
  * fetches row 18 before the user has scrolled past row 3.
  */
-export function useInView<T extends HTMLElement>(rootMargin = '600px 0px'): [React.RefObject<T>, boolean] {
-  const ref = useRef<T | null>(null);
+export function useInView<T extends HTMLElement>(
+  rootMargin = '600px 0px',
+): [(el: T | null) => void, boolean] {
+  // The element itself, kept as state (a callback ref): when it appears after the first render, or
+  // is replaced, it is watched. (A ref object read once on mount missed such an element, and the
+  // rail then never loaded: e.g. Continue Watching on coming back from the player.)
+  const [el, setEl] = useState<T | null>(null);
   const [inView, setInView] = useState(false);
 
   useEffect(() => {
-    if (inView) return;
-    const el = ref.current;
-    if (!el) return;
-
+    if (inView || !el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) setInView(true);
@@ -30,7 +32,7 @@ export function useInView<T extends HTMLElement>(rootMargin = '600px 0px'): [Rea
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [inView, rootMargin]);
+  }, [el, inView, rootMargin]);
 
-  return [ref as React.RefObject<T>, inView];
+  return [setEl, inView];
 }
