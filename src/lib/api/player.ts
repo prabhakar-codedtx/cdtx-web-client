@@ -111,6 +111,10 @@ export interface PlayerConfig {
     /** The order focus moves in. Not sent by the server any more: then the controls' own order. */
     focusOrder?: string[];
     seekStepSeconds: number;
+    /** How far Volume up and Volume down move the volume, in percent. Missing from a version published before it existed. */
+    volumeStepPercent?: number;
+    /** A click on the picture plays or pauses. Missing from older versions: then on for a pointer. */
+    tapToToggle?: boolean;
     /** No touch or focus target smaller than this (device unit). */
     minTarget: number;
   };

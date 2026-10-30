@@ -128,6 +128,41 @@ function withPauseIcon(atom: Atom): Atom {
   };
 }
 
+/** The Volume design while muted: its icon swapped for a crossed-out speaker, in the design's colour. */
+function withMutedIcon(atom: Atom): Atom {
+  return {
+    ...atom,
+    style: {
+      ...atom.style,
+      layers: atom.style.layers.map((l) => {
+        if (l.type !== 'icon' || !l.icon) return l;
+        const paint = l.color ?? '#ffffff';
+        const svg =
+          `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${paint}" ` +
+          'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M11 5 6 9H2v6h4l5 4V5z"/><line x1="22" y1="9" x2="16" y2="15"/>' +
+          '<line x1="16" y1="9" x2="22" y2="15"/></svg>';
+        return {
+          ...l,
+          icon: {
+            draw: 'as-is',
+            svg: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+            vectorDrawable: null,
+            png: [],
+          },
+        };
+      }),
+    },
+  };
+}
+
+/** The volume slider beside a designed Volume button: hidden until the pointer or focus is on it. */
+const VOLUME_CSS =
+  '.cdtx-volume{position:relative;display:flex;width:100%;height:100%}' +
+  '.cdtx-volume-slider{position:absolute;left:100%;top:50%;transform:translateY(-50%);margin:0 0 0 4px;' +
+  'width:0;opacity:0;height:4px;accent-color:#fff;cursor:pointer;transition:width .2s,opacity .2s}' +
+  '.cdtx-volume:hover .cdtx-volume-slider,.cdtx-volume:focus-within .cdtx-volume-slider{width:88px;opacity:1}';
+
 /** The seek bar's look with its progress at `percent` (0-100): the slider layer draws the track and fill. */
 function withProgress(atom: Atom, percent: number): Atom {
   return {
@@ -303,6 +338,23 @@ export function PlayerControls({
     };
   }, [media.playing, open, b.autoHideSeconds, surfaceRef]);
 
+  // ---- behaviour: a click on the picture plays or pauses (`tapToToggle`) ----------------------------
+  // Only a click on the picture itself, or on the controls layer between the controls: never one on a
+  // control or inside an open panel.
+  const tapToToggle = b.tapToToggle ?? b.input === 'pointer';
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (!tapToToggle || !surface || !video) return;
+    const click = (e: MouseEvent) => {
+      if (open || e.button !== 0) return;
+      if (e.target !== video && e.target !== layerRef.current) return;
+      if (video.paused) void video.play().catch(() => undefined);
+      else video.pause();
+    };
+    surface.addEventListener('click', click);
+    return () => surface.removeEventListener('click', click);
+  }, [tapToToggle, open, video, surfaceRef]);
+
   useEffect(() => {
     if (!b.initialFocus || b.input === 'pointer' || b.input === 'touch') return;
     layerRef.current
@@ -374,6 +426,19 @@ export function PlayerControls({
       case 'volume':
         media.toggleMute();
         return;
+      case 'volumeUp':
+      case 'volumeDown': {
+        const step = (typeof c.config?.step === 'number' ? c.config.step : (b.volumeStepPercent ?? 10)) / 100;
+        // Read from the element, not the last render: two quick presses make two steps.
+        const muted = video?.muted ?? media.muted;
+        const volume = video?.volume ?? media.volume;
+        // Turning it up while muted unmutes, from silence; turning it down while muted stays muted.
+        if (c.id === 'volumeUp') {
+          if (muted) media.toggleMute();
+          media.setVolume((muted ? 0 : volume) + step);
+        } else if (!muted) media.setVolume(volume - step);
+        return;
+      }
       default:
         // demo only: what Skip intro and Next episode do (`demo.ts`).
         if (media.demo?.[c.id]) media.demo[c.id]!();
@@ -451,6 +516,10 @@ export function PlayerControls({
         return 'Report an issue';
       case 'volume':
         return media.muted ? 'Unmute' : 'Mute';
+      case 'volumeUp':
+        return 'Volume up';
+      case 'volumeDown':
+        return 'Volume down';
       default:
         return words(c) || c.id;
     }
@@ -503,7 +572,9 @@ export function PlayerControls({
         </span>
       );
     }
-    if (c.id === 'volume' && c.config?.showSlider !== false) {
+    // No design for Volume: the client's own Mute button and slider. With one, the design's icon is the
+    // mute button and the slider opens beside it on hover (`withVolumeSlider`).
+    if (c.id === 'volume' && c.config?.showSlider !== false && !c.look) {
       return (
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>
           <button type="button" data-focus onClick={(e) => press(c, e.currentTarget)}>
@@ -524,6 +595,7 @@ export function PlayerControls({
     }
     let look = c.look ? (LABELS.has(c.id) ? withText(c.look, words(c)) : c.look) : null;
     if (look && c.id === 'playPause' && media.playing) look = withPauseIcon(look);
+    if (look && c.id === 'volume' && media.muted) look = withMutedIcon(look);
     const face = look ? (
       <AtomView atom={look} ctx={ctx} inFrame style={{ width: '100%', height: '100%' }} />
     ) : (
@@ -547,10 +619,28 @@ export function PlayerControls({
       'aria-haspopup': c.panel ? ('dialog' as const) : undefined,
       onClick: (e: React.MouseEvent<HTMLElement>) => press(c, e.currentTarget),
     };
+    // Volume drawn by its design: the icon mutes, and the level slider opens beside it on hover.
+    const withVolumeSlider = (button: React.ReactElement) => (
+      <span className="cdtx-volume">
+        {button}
+        <input
+          type="range"
+          className="cdtx-volume-slider"
+          data-focus
+          aria-label="Volume"
+          min={0}
+          max={1}
+          step={0.05}
+          value={media.muted ? 0 : media.volume}
+          onChange={(e) => media.setVolume(Number(e.target.value))}
+        />
+        <style>{VOLUME_CSS}</style>
+      </span>
+    );
     // A look is drawn as it is (a plain box, no browser button look); the client's own is a button.
     // Either way the hit zone is at least `behaviour.minTarget`.
     if (look) {
-      return (
+      const drawn = (
         <div
           {...common}
           data-pc=""
@@ -575,6 +665,7 @@ export function PlayerControls({
           {face}
         </div>
       );
+      return c.id === 'volume' && c.config?.showSlider !== false ? withVolumeSlider(drawn) : drawn;
     }
     return (
       <button
