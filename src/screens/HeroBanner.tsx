@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loadItems } from '@/app/pagesSlice';
-import type { Block, Rail, Title } from '@/lib/api/types';
+import type { Block, Fill, Rail, Title } from '@/lib/api/types';
 import { useElementWidth, useViewportHeight } from '@/lib/device/useElementWidth';
 import { imageFor } from '@/lib/render/fields';
+import { rgba } from '@/lib/render/paint';
 import { CardView } from '@/render/CardView';
 
 /**
@@ -16,11 +17,14 @@ import { CardView } from '@/render/CardView';
 export function HeroBanner({
   rail,
   blocks,
+  pageBackground,
   onOpen,
   onAction,
 }: {
   rail: Rail;
   blocks: Record<string, Block>;
+  /** The page's background: the backdrop fades into its colour, so no edge shows where the hero ends. */
+  pageBackground?: Fill | null;
   onOpen: (title: Title, rail: Rail) => void;
   onAction: (action: string, title: Title | null) => void;
 }) {
@@ -33,6 +37,31 @@ export function HeroBanner({
   const viewportH = useViewportHeight();
   const [index, setIndex] = useState(0);
   const hl = rail.heroLayout;
+  // The paging dots as the CMS sets them (`heroLayout.dot*`); an older answer without them keeps the look
+  // the dots always had.
+  const dot = {
+    size: hl?.dotSize ?? 8,
+    activeWidth: hl?.dotActiveWidth ?? 24,
+    gap: hl?.dotGap ?? 8,
+    bottom: hl?.dotBottom ?? 12,
+    inset: hl?.dotInset ?? 16,
+    color: hl?.dotColor ?? 'rgba(255,255,255,0.45)',
+    activeColor: hl?.dotActiveColor ?? '#ffffff',
+    justify: hl?.dotPosition === 'left' ? 'flex-start' : hl?.dotPosition === 'right' ? 'flex-end' : 'center',
+  } as const;
+
+  // The banner's look (`heroLayout.banner*`, `backdrop*`, `arrow*`); unset = full width, square, no backdrop.
+  const inset = Math.max(0, hl?.bannerInset ?? 0);
+  const radius = Math.max(0, hl?.bannerRadius ?? 0);
+  const top = Math.max(0, hl?.bannerTop ?? 0);
+  const bottom = Math.max(0, hl?.bannerBottom ?? 0);
+  const fade = Math.max(0, hl?.backdropFade ?? 0);
+  const pageColor =
+    (pageBackground?.type === 'color' ? rgba(pageBackground.color) : rgba(pageBackground?.fallbackColor)) ?? '#000000';
+  // The arrows show while the pointer is over the hero (or a button in it has focus).
+  const [over, setOver] = useState(false);
+  const round = (hl?.arrowStyle ?? 'circle') === 'circle';
+  const outside = hl?.arrowPlacement === 'outside';
 
   useEffect(() => {
     if (url && hasTitles) void dispatch(loadItems(url));
@@ -64,10 +93,19 @@ export function HeroBanner({
   if (entry && (entry.status === 'failed' || (entry.status === 'ready' && count === 0))) return null;
 
   const card = block.card;
+  // Leave room for the margins; never narrower than a third of the screen.
+  const side = Math.min(inset, Math.max(0, width / 3));
+  const bannerWidth = width - 2 * side;
   const ratio = card.width && card.height ? card.width / card.height : 16 / 9;
-  // `stretch.height: screen` is the window's height; otherwise the card keeps its own shape.
+  // `stretch.height: screen` is the window's height; otherwise the card keeps its own shape. A banner set in
+  // from the screen (a space at its sides or above it) sits inside the window, so it keeps its own shape too.
+  const inWindow = inset > 0 || top > 0 || bottom > 0;
   const height =
-    card.stretch?.height === 'screen' ? viewportH : width > 0 ? width / ratio : (card.height ?? 0);
+    card.stretch?.height === 'screen' && !inWindow
+      ? viewportH
+      : bannerWidth > 0
+        ? bannerWidth / ratio
+        : (card.height ?? 0);
   const at = Math.min(index, Math.max(0, count - 1));
   const item = items[at] ?? null;
   const tappable = rail.tap.card.type !== 'none';
@@ -75,26 +113,95 @@ export function HeroBanner({
   const thumbs = hl && hl.thumbnailStyle && hl.thumbnailStyle !== 'none' && hl.thumbnailsShown ? hl : null;
   const [tw, th] = (thumbs?.thumbnailRatio ?? '').split(':').map(Number);
   const thumbRatio = tw && th ? tw / th : ratio;
+  const art = hl?.backdrop === 'blur' && item ? imageFor(item, card.imageAspect) : null;
+  const go = (step: number) => setIndex((i) => (i + step + count) % count);
+  const arrow = (dir: -1 | 1): React.CSSProperties => ({
+    position: 'absolute',
+    top: `calc(50% + ${(top - bottom) / 2}px)`,
+    transform: 'translateY(-50%)',
+    opacity: over ? 1 : 0,
+    transition: 'opacity 0.2s ease',
+    [dir < 0 ? 'left' : 'right']: outside ? Math.max(0, (side - 36) / 2) : 8,
+    zIndex: 2,
+    width: 36,
+    height: 36,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 0,
+    padding: 0,
+    color: '#fff',
+    cursor: 'pointer',
+    background: round ? 'rgba(0,0,0,0.6)' : 'transparent',
+    borderRadius: round ? '50%' : 0,
+  });
 
   return (
     <section
       ref={ref}
       aria-roledescription="carousel"
       aria-label={rail.title ?? undefined}
-      style={{ position: 'relative' }}
+      style={{ position: 'relative', overflow: 'hidden', paddingTop: top, paddingBottom: bottom }}
+      onMouseEnter={() => setOver(true)}
+      onMouseLeave={() => setOver(false)}
+      onFocus={() => setOver(true)}
+      onBlur={() => setOver(false)}
     >
+      {art && (
+        // The slide's art, blurred and darkened, fills the space behind and beside the banner.
+        <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+          <img
+            src={art}
+            alt=""
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transform: 'scale(1.25)',
+              filter: `blur(${hl?.backdropBlur ?? 60}px)`,
+            }}
+          />
+          <div style={{ position: 'absolute', inset: 0, background: '#000', opacity: (hl?.backdropDim ?? 40) / 100 }} />
+          {fade > 0 && (
+            // The bottom of the backdrop melts into the page's colour: no line where the hero ends.
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: fade,
+                background: `linear-gradient(to bottom, transparent, ${pageColor})`,
+              }}
+            />
+          )}
+        </div>
+      )}
       {width > 0 && (
-        <div key={item?.id ?? 'empty'}>
+        <div
+          key={item?.id ?? 'empty'}
+          style={{ position: 'relative', marginLeft: side, width: bannerWidth, borderRadius: radius, overflow: 'hidden' }}
+        >
           <CardView
             block={block}
             title={item}
-            width={width}
+            width={bannerWidth}
             height={height}
             priority
             onOpen={tappable ? (it) => onOpen(it, rail) : undefined}
             onAction={onAction}
           />
         </div>
+      )}
+      {count > 1 && (
+        <>
+          <button type="button" aria-label="Previous title" onClick={() => go(-1)} style={arrow(-1)}>
+            <Chevron dir={-1} size={round ? 18 : 28} />
+          </button>
+          <button type="button" aria-label="Next title" onClick={() => go(1)} style={arrow(1)}>
+            <Chevron dir={1} size={round ? 18 : 28} />
+          </button>
+        </>
       )}
       {thumbs && count > 1 && (
         <div style={{ display: 'flex', overflowX: 'auto' }}>
@@ -131,12 +238,16 @@ export function HeroBanner({
         <div
           style={{
             position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 12,
+            left: side,
+            right: side,
+            bottom: dot.bottom,
+            zIndex: 2,
             display: 'flex',
-            justifyContent: 'center',
-            gap: 8,
+            justifyContent: dot.justify,
+            gap: dot.gap,
+            // Room at the sides when they are not in the middle.
+            paddingLeft: dot.justify === 'flex-start' ? dot.inset : 0,
+            paddingRight: dot.justify === 'flex-end' ? dot.inset : 0,
             pointerEvents: 'none',
           }}
         >
@@ -148,12 +259,12 @@ export function HeroBanner({
               aria-current={i === at}
               onClick={() => setIndex(i)}
               style={{
-                width: i === at ? 24 : 8,
-                height: 8,
+                width: i === at ? dot.activeWidth : dot.size,
+                height: dot.size,
                 padding: 0,
                 border: 0,
-                borderRadius: 4,
-                background: i === at ? '#ffffff' : 'rgba(255,255,255,0.45)',
+                borderRadius: dot.size / 2,
+                background: i === at ? dot.activeColor : dot.color,
                 cursor: 'pointer',
                 pointerEvents: 'auto',
                 transition: 'width 0.2s ease, background 0.2s ease',
@@ -163,5 +274,20 @@ export function HeroBanner({
         </div>
       )}
     </section>
+  );
+}
+
+/** A previous / next arrow: a plain chevron, drawn so it is the same on every system. */
+function Chevron({ dir, size }: { dir: -1 | 1; size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d={dir < 0 ? 'M15 4 7 12l8 8' : 'm9 4 8 8-8 8'}
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

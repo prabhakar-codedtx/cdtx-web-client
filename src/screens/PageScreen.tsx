@@ -51,6 +51,9 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
     (r) => r.visible !== false && r.source.count !== 0,
   );
   const sp = page.spacing;
+  // Nothing to draw: a library with no saved titles, or a page whose rails are all empty.
+  const empty = rails.length === 0 && nextStart === null;
+  const isLibrary = page.rails.some((r) => r.source.type === 'my_list');
 
   return (
     // The tab bar floats over the top: a screen that opens with a hero runs under it, any other starts below it.
@@ -60,12 +63,34 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
         ...fillCss(page.background),
         paddingTop: rails[0]?.layout === 'hero' ? 0 : NAV_HEIGHT,
         paddingBottom: sp.pageBottom ?? 0,
+        // The page's background fills the whole window, however few rails or titles there are: a short page
+        // (a small library, an empty one) must not end halfway down with the browser's white below it.
+        minHeight: '100vh',
+        boxSizing: 'border-box',
       }}
     >
+      {empty && (
+        <div
+          role="status"
+          style={{ padding: '48px 24px', textAlign: 'center', opacity: 0.7, fontSize: 16 }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>
+            {isLibrary ? 'Your list is empty' : 'Nothing here yet'}
+          </div>
+          {isLibrary && <div>Titles you add to your list with the + button appear here.</div>}
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: sp.railGap ?? 0 }}>
         {rails.map((rail) =>
           rail.layout === 'hero' ? (
-            <HeroBanner key={rail.key} rail={rail} blocks={blocks} onOpen={open} onAction={act} />
+            <HeroBanner
+              key={rail.key}
+              rail={rail}
+              blocks={blocks}
+              pageBackground={page.background}
+              onOpen={open}
+              onAction={act}
+            />
           ) : (
             <div key={rail.key} style={paddingCss(sp.railPadding)}>
               <Rail

@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -241,7 +242,9 @@ export function CardView({
 }: CardViewProps) {
   const card = block.card;
   const fit = fitOf({ width: W, height: H }, card);
-  const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction };
+  const resolveAgain = useRef<() => void>(() => {});
+  const onResize = useCallback(() => resolveAgain.current(), []);
+  const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction, onResize };
   // The designed card at the size it is drawn: what a fixed or minimum box is a fraction of.
   const designed = { w: (card.width ?? W) * fit, h: (card.height ?? H) * fit };
   const rootRef = useRef<HTMLDivElement>(null);
@@ -279,6 +282,10 @@ export function CardView({
   } | null>(null);
   const ruleKey = `${block.id}|${W}|${H}|${fit}|${title?.id ?? ''}|${rules.length}`;
   const lastKey = useRef(ruleKey);
+  // A part grew or shrank (a description was opened): measure every part again and solve the rules.
+  useLayoutEffect(() => {
+    resolveAgain.current = () => setSolved(null);
+  }, []);
 
   useLayoutEffect(() => {
     if (lastKey.current !== ruleKey) {

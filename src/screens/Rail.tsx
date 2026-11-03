@@ -72,6 +72,12 @@ function withLabel(atom: Atom, label: string | null): Atom {
   };
 }
 
+/** The link as just its arrow: the design's own icon when it has one (the words go), else a `›`. */
+function arrowOnly(atom: Atom): Atom {
+  if (!atom.style.layers.some((l) => l.type === 'icon')) return withLabel(atom, '›');
+  return { ...atom, style: { ...atom.style, layers: atom.style.layers.filter((l) => l.type !== 'text') } };
+}
+
 /**
  * A rail's "See all" link when no header design draws it: its words (`label`, with the count unless the
  * editor turned it off), as a text link (`label ›`), a button, or just an arrow, in the editor's text style
@@ -142,6 +148,8 @@ export function Rail({
   const layout = rail.layout === 'banner' || rail.layout === 'grid' ? rail.layout : 'carousel';
   const { w, h } = cardSize(rl, block, layout, lane, items.length);
   const gap = rl.gap ?? 0;
+  // The space the editor set between the title (or a header design) and the cards.
+  const headerGap = rl.headerGap ?? 0;
   const start = rl.start ?? 0;
   const end = rl.end ?? 0;
   const vertical = layout === 'carousel' && rl.direction === 'vertical';
@@ -168,6 +176,9 @@ export function Rail({
       if (action === 'see_all') onSeeAll(rail);
     },
   };
+  // "See all" as an arrow only (`seeAll.style: arrow`): the header design's link is a chevron right after
+  // the title, and the title and chevron are one link to the rail's titles.
+  const arrowOnlyLink = rail.seeAll.show && rail.seeAll.style === 'arrow';
   const strip = (b: Block) => {
     const s = b.card.strip;
     const along: Record<string, string> = {
@@ -182,8 +193,8 @@ export function Rail({
           display: 'flex',
           flexDirection: s?.direction === 'column' ? 'column' : 'row',
           alignItems: along[s?.align ?? ''] ?? 'center',
-          justifyContent: along[s?.distribute ?? ''] ?? 'flex-start',
-          gap: s?.gap ?? undefined,
+          justifyContent: arrowOnlyLink ? 'flex-start' : (along[s?.distribute ?? ''] ?? 'flex-start'),
+          gap: arrowOnlyLink ? 6 : (s?.gap ?? undefined),
           padding: `${s?.paddingY ?? 0}px ${s?.paddingX ?? 0}px`,
           width: lane,
           boxSizing: 'border-box',
@@ -194,12 +205,19 @@ export function Rail({
           // has one (`seeAll.show`), and in that rail's own words (`seeAll.label`).
           .filter((a) => a.action !== 'see_all' || rail.seeAll.show)
           .map((a) => (
-            <AtomView
+            <span
               key={a.id}
-              atom={a.action === 'see_all' ? withLabel(a, rail.seeAll.label) : a}
-              ctx={stripCtx}
-              inFrame={false}
-            />
+              onClick={arrowOnlyLink ? () => onSeeAll(rail) : undefined}
+              style={arrowOnlyLink ? { display: 'contents', cursor: 'pointer' } : { display: 'contents' }}
+            >
+              <AtomView
+                atom={
+                  a.action === 'see_all' ? (arrowOnlyLink ? arrowOnly(a) : withLabel(a, rail.seeAll.label)) : a
+                }
+                ctx={stripCtx}
+                inFrame={false}
+              />
+            </span>
           ))}
       </div>
     );
@@ -220,6 +238,8 @@ export function Rail({
       />
     ) : null;
 
+  const headerNode = header ? spanning(header) : null;
+
   // The link beside the title, as the rail's `seeAll` says, unless a header or footer design draws it.
   const sa = rail.seeAll;
   const designDraws = [header, footer].some(
@@ -229,7 +249,10 @@ export function Rail({
         b.components.some((c) => c.atoms.some((a) => a.action === 'see_all'))),
   );
   const link = sa.show && sa.label && !designDraws ? seeAllLink(rail, t.color) : null;
-  const linkLeft = sa.position === 'left';
+  // An arrow-only link sits right after the title, which is a link too (a chevron beside the heading);
+  // any other style is at the left or right end of the title row.
+  const inlineArrow = !!link && sa.style === 'arrow';
+  const linkLeft = !inlineArrow && sa.position === 'left';
 
   return (
     <section ref={inViewRef} aria-label={rail.title ?? undefined} style={fillCss(rail.background)}>
@@ -239,9 +262,10 @@ export function Rail({
             style={{
               display: 'flex',
               alignItems: 'baseline',
-              gap: 12,
+              gap: inlineArrow ? 6 : 12,
               paddingLeft: start,
               paddingRight: end,
+              marginBottom: headerGap,
             }}
           >
             {linkLeft && link && (
@@ -249,7 +273,16 @@ export function Rail({
                 {link.text}
               </button>
             )}
-            <div role="heading" aria-level={2} style={{ ...textCss(t), flex: '1 1 auto' }}>
+            <div
+              role="heading"
+              aria-level={2}
+              onClick={inlineArrow ? () => onSeeAll(rail) : undefined}
+              style={{
+                ...textCss(t),
+                flex: inlineArrow ? '0 1 auto' : '1 1 auto',
+                cursor: inlineArrow ? 'pointer' : undefined,
+              }}
+            >
               {!t.hidden ? rail.title : null}
             </div>
             {!linkLeft && link && (
@@ -261,7 +294,7 @@ export function Rail({
         ) : null}
         {available > 0 && (
           <div style={paddingCss(body)}>
-            {header && spanning(header)}
+            {headerNode && <div style={{ marginBottom: headerGap }}>{headerNode}</div>}
             <div
               ref={rowRef}
               style={{
