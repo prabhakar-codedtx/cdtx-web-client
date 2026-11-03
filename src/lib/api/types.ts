@@ -101,7 +101,10 @@ export type BadgeKey =
   | 'premium'
   | 'live'
   | 'exclusive'
-  | 'original';
+  | 'original'
+  // About the viewer, set by the server for the profile that asked (exactly one is true).
+  | 'inWatchlist'
+  | 'notInWatchlist';
 
 /** What the player offers for one title (`GET /v1/content/{id}`): only what the title really has. */
 export interface Playback {
@@ -127,6 +130,8 @@ export interface Title {
   audioQuality: string[];
   episodeLabel: string | null;
   badges: Record<BadgeKey, boolean>;
+  /** The link its Share button sends, finished by the server from the product's `shareUrl` setting; null when it set none. */
+  shareUrl?: string | null;
   images: TitleImage[];
   logoUrl: string | null;
   previewVideoUrl: string | null;
@@ -229,6 +234,10 @@ export interface TextStyle {
   textCase: 'none' | 'uppercase' | 'lowercase' | 'capitalize' | string | null;
   maxLines: number | null;
   shadows: Shadow[];
+  /** Cut at `maxLines` and, when the text really is cut, show `moreLabel` to open it (`lessLabel` to cut it again). */
+  expandable?: boolean | null;
+  moreLabel?: string | null;
+  lessLabel?: string | null;
 }
 
 // ---- a block: one card design ----------------------------------------------------------------
@@ -493,6 +502,8 @@ export interface RailLayout {
   cardAspectRatio: number | null;
   gap: number | null;
   rowGap: number | null;
+  /** Space between the rail's title (or header design) and its cards. */
+  headerGap: number | null;
   start: number | null;
   end: number | null;
   /** TV: free room to keep around the cards for the focus look. */
@@ -520,6 +531,35 @@ export interface Rail {
     thumbnailsShown: number | null;
     thumbnailRatio: string | null;
     thumbnailWidth: number | null;
+    /** The paging dots, set in the CMS (lengths in the device's unit; the colours are `#rrggbb[aa]`). */
+    dotSize?: number | null;
+    /** The current dot's width: a longer pill. */
+    dotActiveWidth?: number | null;
+    dotGap?: number | null;
+    /** Space between the dots and the bottom of the slide. */
+    dotBottom?: number | null;
+    /** Space at the side when they sit at the left or right. */
+    dotInset?: number | null;
+    dotColor?: string | null;
+    dotActiveColor?: string | null;
+    /** Where they sit along the bottom. */
+    dotPosition?: 'left' | 'center' | 'right' | null;
+    /** The banner's look, set in the CMS (lengths in the device's unit): the space either side, the corner
+     * radius, a blurred copy of the slide's art behind it, and the previous / next arrows. */
+    bannerInset?: number | null;
+    bannerRadius?: number | null;
+    /** Space above the banner. */
+    bannerTop?: number | null;
+    /** Space below the banner (room for the backdrop to fade out). */
+    bannerBottom?: number | null;
+    /** Height of the fade at the bottom of the backdrop, into the page's colour. */
+    backdropFade?: number | null;
+    backdrop?: 'off' | 'blur' | null;
+    backdropBlur?: number | null;
+    /** The black over the backdrop, 0 to 100 (%). */
+    backdropDim?: number | null;
+    arrowStyle?: 'circle' | 'chevron' | null;
+    arrowPlacement?: 'inside' | 'outside' | null;
   } | null;
   tap: { card: TapAction; cards: Record<string, TapAction>; elements: Record<string, string> };
   railLayout: RailLayout;

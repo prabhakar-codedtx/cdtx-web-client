@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { boot } from '@/app/launchSlice';
 import { clearToast } from '@/app/uiSlice';
+import { ShareMenu } from '@/screens/ShareMenu';
 import { useDt } from '@/lib/device/useDt';
 import { useFonts } from '@/lib/useFonts';
 import { TopNav } from '@/screens/TopNav';
@@ -73,7 +74,29 @@ export function Shell() {
     <>
       <TopNav />
       {status === 'ready' ? <Outlet /> : <div>Loading…</div>}
-      {toast && <div role="status">{toast.text}</div>}
+      {toast && (
+        // Fixed to the window: on a long page a message at the end of it would never be seen.
+        <div
+          role="status"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 32,
+            transform: 'translateX(-50%)',
+            zIndex: 1100,
+            maxWidth: 'calc(100vw - 32px)',
+            padding: '12px 20px',
+            borderRadius: 8,
+            background: '#1b1b22',
+            color: '#ffffff',
+            fontSize: 14,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          }}
+        >
+          {toast.text}
+        </div>
+      )}
+      <ShareMenu />
     </>
   );
 }

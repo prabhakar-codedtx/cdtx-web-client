@@ -1,8 +1,9 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { showToast } from '@/app/uiSlice';
-import { hasDetailPage } from '@/lib/api/endpoints';
+import { openShare, showToast } from '@/app/uiSlice';
+import { hasDetailPage, shareLink } from '@/lib/api/endpoints';
+import { toggleWatchlist } from '@/app/pagesSlice';
 import type { Block, Fill, Rail, SeeAllPageDesign, Title } from '@/lib/api/types';
 
 /**
@@ -28,9 +29,29 @@ export function useTitleActions() {
     [navigate, dispatch, launch],
   );
 
+  // The Share button: opens the menu (Facebook, WhatsApp, X, Copy link) with the title's own link.
+  const share = useCallback(
+    (title: Title) => {
+      if (!shareLink(title)) {
+        dispatch(showToast('Sharing is not available yet.'));
+        return;
+      }
+      dispatch(openShare(title));
+    },
+    [dispatch],
+  );
+
   const act = useCallback(
     (action: string, title: Title | null) => {
       if (!title) return;
+      if (action === 'watchlist') {
+        void dispatch(toggleWatchlist(title));
+        return;
+      }
+      if (action === 'share') {
+        void share(title);
+        return;
+      }
       if (action === 'play') {
         // The player, laid out by the product's player config; the title goes along for its name and picture.
         navigate(`/play/${title.type ?? 'title'}/${title.id}`, { state: { title } });
@@ -42,7 +63,7 @@ export function useTitleActions() {
       }
       dispatch(showToast(`"${action}" is not available yet.`));
     },
-    [navigate, detail, dispatch],
+    [navigate, detail, dispatch, share],
   );
 
   const open = useCallback(

@@ -37,6 +37,8 @@ export function path(url: string): string {
 let apiOrigin: string | null = null;
 /** Where the player reports progress (`progressURL`, `…/progress/{content_id}`). */
 let progressUrl = '/v1/progress/{content_id}';
+/** Where the viewer's watchlist is changed (`watchlistURL`, `…/watchlist/{content_id}`): PUT adds, DELETE removes. */
+let watchlistUrl = '/v1/watchlist/{content_id}';
 
 /**
  * A file the API hands out (an icon): drawn through the same origin as the API's calls, so a
@@ -61,6 +63,7 @@ export async function getLaunch(ctx: DeliveryContext): Promise<Launch> {
   if (typeof byKey.pagesURL === 'string' && /^https?:\/\//i.test(byKey.pagesURL))
     apiOrigin = new URL(byKey.pagesURL).origin;
   if (typeof byKey.progressURL === 'string') progressUrl = byKey.progressURL;
+  if (typeof byKey.watchlistURL === 'string') watchlistUrl = byKey.watchlistURL;
   const text = (key: string): string => {
     const v = byKey[key];
     if (typeof v !== 'string') throw new Error(`The launch config has no ${key}`);
@@ -266,6 +269,25 @@ export async function putProgress(
       ...(duration && duration > 0 ? { durationSeconds: duration } : {}),
     })
     .catch(() => undefined);
+}
+
+/**
+ * Put the title in the viewer's list (`saved`), or take it out. The server keeps the list by the
+ * viewer's profile (`X-Profile-Id`, added by `client.ts`). Throws when the call fails, so the caller
+ * can undo what it showed.
+ */
+export async function setWatchlist(id: string, saved: boolean): Promise<void> {
+  const url = path(fill(watchlistUrl, { content_id: id }));
+  if (saved) await http.put(url);
+  else await http.delete(url);
+}
+
+/**
+ * The link the Share button sends: the one the server finished for this title (`shareUrl`, built from the
+ * product's setting in the CMS). Null when the product set none: there is nothing to share.
+ */
+export function shareLink(title: Title): string | null {
+  return typeof title.shareUrl === 'string' && title.shareUrl ? title.shareUrl : null;
 }
 
 /** The episodes of the season (or series) the title belongs to, in order; an episode gets its season's. */

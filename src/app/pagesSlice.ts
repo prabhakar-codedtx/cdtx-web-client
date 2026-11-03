@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import { DETAIL_SCREEN, getDetailPage, getPage, getRailItems } from '@/lib/api/endpoints';
+import { DETAIL_SCREEN, getDetailPage, getPage, getRailItems, setWatchlist } from '@/lib/api/endpoints';
+import { showToast } from '@/app/uiSlice';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { ApiError } from '@/lib/api/client';
 import type { Page, Title } from '@/lib/api/types';
@@ -82,10 +83,65 @@ export const loadItems = createAsyncThunk(
   },
 );
 
+/** Whether the viewer has the title in their list, as the titles already loaded say (the server flags them). */
+function isSaved(state: PagesState, id: string): boolean {
+  for (const entry of Object.values(state.items)) {
+    const hit = entry.data?.find((t) => t.id === id);
+    if (hit) return Boolean(hit.badges?.inWatchlist);
+  }
+  return false;
+}
+
+/**
+ * The Add to watchlist button: add the title to the viewer's list, or take it out when it is there.
+ * Every loaded copy of the title is flipped at once so the button changes as it is tapped; when the
+ * call fails they are flipped back and a message says so. A "My list" rail is asked for again after.
+ */
+export const toggleWatchlist = createAsyncThunk<void, Title>(
+  'pages/watchlist',
+  async (title, { dispatch, getState }) => {
+    const state = (getState() as RootState).pages;
+    const saved = !isSaved(state, title.id);
+    dispatch(slice.actions.savedChanged({ id: title.id, saved }));
+    try {
+      await setWatchlist(title.id, saved);
+    } catch {
+      dispatch(slice.actions.savedChanged({ id: title.id, saved: !saved }));
+      dispatch(showToast(saved ? 'Could not add to your list.' : 'Could not remove from your list.'));
+      return;
+    }
+    dispatch(showToast(saved ? 'Added to your list.' : 'Removed from your list.'));
+    // A rail that lists the viewer's saved titles changed: fetch it again.
+    const rails = Object.values((getState() as RootState).pages.pages).flatMap((e) => e.data?.rails ?? []);
+    for (const r of rails) {
+      if (r.source.type === 'my_list' && r.source.contentUrl)
+        void dispatch(refreshItems(r.source.contentUrl));
+    }
+  },
+);
+
+/** A rail's titles again, kept on screen until the new ones come (unlike `loadItems`, which empties it). */
+export const refreshItems = createAsyncThunk('pages/refreshItems', async (contentUrl: string) => ({
+  contentUrl,
+  items: await getRailItems(contentUrl),
+}));
+
 const slice = createSlice({
   name: 'pages',
   initialState: { pages: {}, items: {} } as PagesState,
-  reducers: {},
+  reducers: {
+    /** Every loaded copy of a title says whether the viewer saved it (exactly one of the two flags). */
+    savedChanged: (s, a: { payload: { id: string; saved: boolean } }) => {
+      for (const entry of Object.values(s.items)) {
+        for (const t of entry.data ?? []) {
+          if (t.id === a.payload.id && t.badges) {
+            t.badges.inWatchlist = a.payload.saved;
+            t.badges.notInWatchlist = !a.payload.saved;
+          }
+        }
+      }
+    },
+  },
   extraReducers: (b) => {
     b.addCase(loadPage.pending, (s, a) => {
       const key = pageKey(a.meta.arg.slug, a.meta.arg.contentId, getDeliveryContext().dt);
@@ -105,6 +161,9 @@ const slice = createSlice({
       s.items[a.meta.arg] = { status: 'loading', data: null, error: null, code: null };
     });
     b.addCase(loadItems.fulfilled, (s, a) => {
+      s.items[a.payload.contentUrl] = { status: 'ready', data: a.payload.items, error: null, code: null };
+    });
+    b.addCase(refreshItems.fulfilled, (s, a) => {
       s.items[a.payload.contentUrl] = { status: 'ready', data: a.payload.items, error: null, code: null };
     });
     b.addCase(loadItems.rejected, (s, a) => {
