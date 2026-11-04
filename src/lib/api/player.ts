@@ -110,6 +110,8 @@ export interface PlayerConfig {
     initialFocus: string | null;
     focusOrder: string[];
     seekStepSeconds: number;
+    /** The step of Up and Down on the keyboard, in percent of the volume (default 10). */
+    volumeStepPercent?: number;
     /** No touch or focus target smaller than this (device unit). */
     minTarget: number;
   };
