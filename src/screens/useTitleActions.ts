@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, type Location } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { openShare, showToast } from '@/app/uiSlice';
 import { hasDetailPage, shareLink } from '@/lib/api/endpoints';
@@ -14,19 +14,29 @@ import type { Block, Fill, Rail, SeeAllPageDesign, Title } from '@/lib/api/types
  */
 export function useTitleActions() {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useAppDispatch();
   const launch = useAppSelector((s) => s.launch.launch);
 
   // Every type has a detail screen when the server sends `detailURL`; an older server names some.
+  // `presentation` is what the tap says (`tap.card.presentation`): `dialog` opens the details over the
+  // screen the viewer is on (that screen stays drawn behind, see `AppRoutes`); anything else is the page.
+  // A tap inside a dialog replaces its title instead of stacking another, so one Close always returns.
   const detail = useCallback(
-    (title: Title) => {
+    (title: Title, presentation?: string | null) => {
       if (!hasDetailPage(launch, title.type)) {
         dispatch(showToast(`There is no detail page for ${title.type || 'this title'} yet.`));
         return;
       }
-      navigate(`/title/${encodeURIComponent(title.type ?? 'title')}/${title.id}`);
+      const to = `/title/${encodeURIComponent(title.type ?? 'title')}/${title.id}`;
+      const behind = (location.state as { background?: Location } | null)?.background;
+      if (presentation === 'dialog') {
+        navigate(to, { state: { background: behind ?? location }, replace: Boolean(behind) });
+      } else {
+        navigate(to);
+      }
     },
-    [navigate, dispatch, launch],
+    [navigate, dispatch, launch, location],
   );
 
   // The Share button: opens the menu (Facebook, WhatsApp, X, Copy link) with the title's own link.
@@ -82,7 +92,7 @@ export function useTitleActions() {
           dispatch(showToast('Opening a full list is not available yet.'));
           return;
         default:
-          detail(title);
+          detail(title, tap?.presentation);
       }
     },
     [act, detail, dispatch],

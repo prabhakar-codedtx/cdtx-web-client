@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loadItems } from '@/app/pagesSlice';
 import type { Block, Fill, Rail, Title } from '@/lib/api/types';
+import { DialogRoomContext } from '@/lib/device/dialogContext';
 import { useElementWidth, useViewportHeight } from '@/lib/device/useElementWidth';
 import { imageFor } from '@/lib/render/fields';
 import { rgba } from '@/lib/render/paint';
@@ -35,6 +36,8 @@ export function HeroBanner({
   const entry = useAppSelector((s) => s.pages.items[url]);
   const [ref, width] = useElementWidth<HTMLElement>();
   const viewportH = useViewportHeight();
+  // In the details dialog a hero keeps its own shape: it is not the height of the window.
+  const inDialog = useContext(DialogRoomContext) !== null;
   const [index, setIndex] = useState(0);
   const hl = rail.heroLayout;
   // The paging dots as the CMS sets them (`heroLayout.dot*`); an older answer without them keeps the look
@@ -101,7 +104,7 @@ export function HeroBanner({
   // from the screen (a space at its sides or above it) sits inside the window, so it keeps its own shape too.
   const inWindow = inset > 0 || top > 0 || bottom > 0;
   const height =
-    card.stretch?.height === 'screen' && !inWindow
+    card.stretch?.height === 'screen' && !inWindow && !inDialog
       ? viewportH
       : bannerWidth > 0
         ? bannerWidth / ratio

@@ -490,6 +490,8 @@ export interface Block {
 export interface TapAction {
   type: 'detail' | 'player' | 'collection' | 'link' | 'none' | string | null;
   target: string | null;
+  /** On a `detail` tap: how the details open on this device, already worked out by the server. `dialog` is an overlay; null or `fullScreen` is the page. */
+  presentation?: 'fullScreen' | 'dialog' | string | null;
 }
 
 export interface RailLayout {
