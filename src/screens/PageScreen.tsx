@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useAppSelector } from '@/app/hooks';
 import { DETAIL_SCREEN, getDetailPage, getPage } from '@/lib/api/endpoints';
 import type { Block, Page } from '@/lib/api/types';
+import { DialogRoomContext } from '@/lib/device/dialogContext';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { useInView } from '@/lib/device/useInView';
 import { fillCss, paddingCss } from '@/lib/render/paint';
@@ -46,6 +47,8 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
     };
   }, [nearEnd, nextStart, launch, page.slug, contentId, screen]);
 
+  // Inside the details dialog the page is as tall as its content, not the window.
+  const inDialog = useContext(DialogRoomContext) !== null;
   const blocks: Record<string, Block> = Object.assign({}, page.blocks, ...more.map((p) => p.blocks));
   const rails = [...page.rails, ...more.flatMap((p) => p.rails)].filter(
     (r) => r.visible !== false && r.source.count !== 0,
@@ -65,7 +68,7 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
         paddingBottom: sp.pageBottom ?? 0,
         // The page's background fills the whole window, however few rails or titles there are: a short page
         // (a small library, an empty one) must not end halfway down with the browser's white below it.
-        minHeight: '100vh',
+        minHeight: inDialog ? undefined : '100vh',
         boxSizing: 'border-box',
       }}
     >

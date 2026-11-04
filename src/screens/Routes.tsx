@@ -49,6 +49,11 @@ export function TabRoute() {
  */
 export function DetailRoute() {
   const { type, id } = useParams<{ type: string; id: string }>();
+  return <DetailScreen type={type} id={id} />;
+}
+
+/** The detail screen of one title: a full page (`DetailRoute`) or the inside of a dialog (`DetailDialog`). */
+export function DetailScreen({ type, id }: { type: string | undefined; id: string | undefined }) {
   if (!id) {
     return (
       <div>

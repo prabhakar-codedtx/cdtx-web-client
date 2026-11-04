@@ -31,7 +31,8 @@ export function Shell() {
     document.body.style.fontFamily = theme?.defaultFontFamily ?? '';
   }, [theme]);
 
-  // A new screen starts at the top.
+  // A new screen starts at the top. (A dialog does not change this `pathname`: inside `AppRoutes` the
+  // location is the screen behind it, so opening or closing a dialog leaves that screen where it was.)
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
