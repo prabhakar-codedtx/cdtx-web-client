@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/v1/:path*", "destination": "https://3-109-241-147.sslip.io/v1/:path*" },
+    { "source": "/image/:path*", "destination": "https://3-109-241-147.sslip.io/image/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
