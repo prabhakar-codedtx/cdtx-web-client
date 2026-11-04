@@ -380,6 +380,7 @@ export function adaptPlayerConfig(raw: unknown): PlayerConfig {
     rows: Object.fromEntries(
       Object.entries((d.rows ?? {}) as Json).map(([id, r]) => [id, rowBlock(id, r as Json)]),
     ),
-    behaviour: d.behaviour,
+    // A newer config may not send a focus order: then the controls keep the order they come in.
+    behaviour: { focusOrder: [], ...(d.behaviour ?? {}) },
   } as PlayerConfig;
 }
