@@ -362,6 +362,9 @@ export interface Atom {
   staticText: string | null;
   /** A badge key: drawn only when the title's `badges[key]` is true. */
   showWhen: BadgeKey | string | null;
+  /** `hover`: drawn only while the pointer is over the card (or a key's focus is inside it), e.g. a "×"
+   * that takes the title out of My list. A touch screen, with no hover, always draws it. Absent or null: always. */
+  showOn?: 'hover' | string | null;
   style: Style;
   relative: { fontSize: number | null; cornerRadius: number | null } | null;
   focus: AtomFocus | null;

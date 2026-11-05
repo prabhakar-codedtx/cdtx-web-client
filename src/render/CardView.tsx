@@ -170,7 +170,15 @@ function ComponentView({
       }
       const atom = it.id ? byId.get(it.id) : undefined;
       if (!atom || !isDrawn(atom, ctx.title, ctx.aspect)) return null;
-      return <AtomView key={atom.id} atom={atom} ctx={ctx} inFrame={false} />;
+      const view = <AtomView key={atom.id} atom={atom} ctx={ctx} inFrame={false} />;
+      // `display: contents` keeps the row's layout; `visibility` still passes down to the atom.
+      return atom.showOn === 'hover' ? (
+        <span key={atom.id} data-show-on="hover" style={{ display: 'contents' }}>
+          {view}
+        </span>
+      ) : (
+        view
+      );
     });
   return <div style={css}>{draw(al.items)}</div>;
 }
@@ -187,6 +195,13 @@ const Root = styled.div<{ $radius: string; $focus: Card['focus']; $k: number }>`
   /* The rank numeral may sit behind the card (z-index -1): keep it inside this card, above the page. */
   isolation: isolate;
   border-radius: ${(p) => p.$radius};
+  /* A part marked \`showOn: hover\` (a "×" that takes the title out of My list) shows while the pointer is
+     over the card or a key's focus is inside it. A screen with no hover (touch) always shows it. */
+  @media (hover: hover) {
+    &:not(:hover):not(:focus-within) [data-show-on='hover'] {
+      visibility: hidden;
+    }
+  }
   ${(p) => {
     const f = p.$focus;
     if (!f) return '';
@@ -451,7 +466,12 @@ export function CardView({
         )}
         {showParts &&
           placed.map((p) => (
-            <div key={p.id} data-item-id={p.id} style={{ ...placement(p), zIndex: p.z ?? undefined }}>
+            <div
+              key={p.id}
+              data-item-id={p.id}
+              data-show-on={p.atom?.showOn === 'hover' ? 'hover' : undefined}
+              style={{ ...placement(p), zIndex: p.z ?? undefined }}
+            >
               {p.atom ? (
                 <AtomView
                   atom={p.atom}
