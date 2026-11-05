@@ -86,29 +86,34 @@ export function DetailDialog() {
           outline: 'none',
         }}
       >
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={() => navigate(-1)}
-          style={{
-            position: 'sticky',
-            top: 12,
-            float: 'right',
-            marginRight: 12,
-            zIndex: 20,
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            border: 'none',
-            background: 'rgba(0,0,0,0.6)',
-            color: '#fff',
-            fontSize: 20,
-            lineHeight: '36px',
-            cursor: 'pointer',
-          }}
-        >
-          ×
-        </button>
+        {/* A row of no height that stays at the top as the panel scrolls; the button hangs from it into
+            the panel's top-right corner, over the artwork. Floating the button instead made the page
+            beside it narrower, and the × ended up in a strip past the artwork's edge. */}
+        <div style={{ position: 'sticky', top: 0, height: 0, zIndex: 20 }}>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => navigate(-1)}
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              width: 36,
+              height: 36,
+              padding: 0,
+              borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.35)',
+              background: 'rgba(0,0,0,0.6)',
+              color: '#fff',
+              fontSize: 22,
+              lineHeight: '34px',
+              textAlign: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            ×
+          </button>
+        </div>
         <DialogRoomContext.Provider value={{ height: room }}>
           <DetailScreen type={match.params.type} id={match.params.id} />
         </DialogRoomContext.Provider>

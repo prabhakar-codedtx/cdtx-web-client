@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { loadItems } from '@/app/pagesSlice';
+import { isViewerRail, loadItems, refreshItems } from '@/app/pagesSlice';
 import type { Atom, Block, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { useInView } from '@/lib/device/useInView';
@@ -220,9 +220,23 @@ export function Rail({
   const hasTitles = (rail.source.count ?? 0) > 0;
   const entry = useAppSelector((s) => s.pages.items[url]);
 
+  // The viewer's own rails (My list, Continue Watching) are asked for again each time their screen is
+  // shown, at once (not when in view): what was loaded before may be out of date, and an empty list
+  // kept from before draws nothing, so it would never come into view to be asked again. The titles
+  // already there stay on screen until the new ones come. Any other rail is asked once, when near.
+  const viewer = isViewerRail(rail);
+  const refreshed = useRef(false);
   useEffect(() => {
-    if (inView && url && hasTitles) void dispatch(loadItems(url));
-  }, [inView, url, hasTitles, dispatch]);
+    if (!url || !hasTitles) return;
+    if (viewer && entry && !refreshed.current) {
+      refreshed.current = true;
+      void dispatch(refreshItems(url));
+      return;
+    }
+    if (inView) void dispatch(loadItems(url));
+    // `entry` only decides whether there is something to refresh; a change to it must not ask again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView, url, hasTitles, viewer, dispatch]);
 
   // Nothing to show (`count` 0, no design), or titles that came back empty or failed: no room taken.
   if (!hasTitles || !block) return null;

@@ -54,8 +54,15 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
     (r) => r.visible !== false && r.source.count !== 0,
   );
   const sp = page.spacing;
+  // A rail whose titles came back none (a library emptied since the page was asked for: the
+  // page's `count` still says 1, the list fetched again after the last Remove says 0) draws nothing.
+  const items = useAppSelector((s) => s.pages.items);
+  const drawn = rails.filter((r) => {
+    const e = r.source.contentUrl ? items[r.source.contentUrl] : undefined;
+    return !(e?.status === 'ready' && (e.data?.length ?? 0) === 0);
+  });
   // Nothing to draw: a library with no saved titles, or a page whose rails are all empty.
-  const empty = rails.length === 0 && nextStart === null;
+  const empty = drawn.length === 0 && nextStart === null;
   const isLibrary = page.rails.some((r) => r.source.type === 'my_list');
 
   return (
