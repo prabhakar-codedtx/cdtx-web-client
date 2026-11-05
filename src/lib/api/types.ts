@@ -583,6 +583,11 @@ export interface Rail {
      * rail's own cards, its words in `endCardLabel`, and a tap that does what `tap` says. */
     endCard?: boolean;
     endCardLabel?: string | null;
+    /** How See all is shown: `button` (the link in the header) or `card` (the View all card); null: neither. */
+    display?: 'button' | 'card' | string | null;
+    /** The View all card's own design, `blocks[endCardBlockKey]`, drawn at the size of the row's cards with
+     * no title. Null: the plain card with `endCardLabel`. */
+    endCardBlockKey?: string | null;
     /** Font, size, weight, case and `color`. */
     text?: TextStyle | null;
   };
