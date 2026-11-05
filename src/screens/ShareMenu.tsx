@@ -135,7 +135,8 @@ export function ShareMenu() {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1000,
+        // Above the details dialog (1000), which a Share inside it opens over; below the toast (1100).
+        zIndex: 1050,
         background: 'rgba(0,0,0,0.6)',
         display: 'flex',
         alignItems: 'center',
