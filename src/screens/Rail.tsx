@@ -106,19 +106,46 @@ function seeAllLink(rail: RailJson, titleColor: string | null): { text: string; 
   };
 }
 
-/** The "View all" card at the end of a row: as big as the row's cards, its words in the middle with an arrow. */
+/**
+ * The "View all" card at the end of a row, as big as the row's cards: its own design from the CMS
+ * (`seeAll.endCardBlockKey`, a Content Block of card type "View all card") when the rail picked one,
+ * else a plain card with its words in the middle and an arrow.
+ */
 function EndCard({
   rail,
+  design,
   width,
   height,
   onOpen,
 }: {
   rail: RailJson;
+  design: Block | null;
   width: number;
   height: number;
   onOpen: () => void;
 }) {
   const sa = rail.seeAll;
+  if (design) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        data-end-card="design"
+        aria-label={sa.endCardLabel || 'View all'}
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        style={{ flex: '0 0 auto', width, height, cursor: 'pointer' }}
+      >
+        {/* No title: the design shows its own words and icon. */}
+        <CardView block={design} title={null} width={width} height={height} standalone />
+      </div>
+    );
+  }
   const ink = sa.text?.color ?? '#ffffff';
   return (
     <button
@@ -389,7 +416,13 @@ export function Rail({
               {/* After the last card of a row that scrolls: only once its titles are here, and not when the
                   tap goes nowhere. */}
               {scrolls && rail.seeAll.endCard && loaded && rail.seeAll.tap?.type !== 'none' && (
-                <EndCard rail={rail} width={w} height={h} onOpen={() => onSeeAll(rail)} />
+                <EndCard
+                  rail={rail}
+                  design={rail.seeAll.endCardBlockKey ? (blocks[rail.seeAll.endCardBlockKey] ?? null) : null}
+                  width={w}
+                  height={h}
+                  onOpen={() => onSeeAll(rail)}
+                />
               )}
             </div>
             {footer && spanning(footer)}
