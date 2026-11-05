@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
+import { useAppSelector } from '@/app/hooks';
 import { DialogRoomContext } from '@/lib/device/dialogContext';
 import { DetailScreen } from '@/screens/Routes';
 
@@ -13,6 +14,10 @@ export function DetailDialog() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const panel = useRef<HTMLDivElement>(null);
+  // A Share menu opened from inside the dialog sits above it and takes Escape first: Escape closes only it.
+  const shareOpen = useAppSelector((s) => s.ui.share !== null);
+  const shareOpenRef = useRef(shareOpen);
+  shareOpenRef.current = shareOpen;
   const match = matchPath('/title/:type/:id', pathname);
   // The panel is as tall as the window less its margins (4vh above and below).
   const [room, setRoom] = useState(() => Math.round(window.innerHeight * 0.92));
@@ -30,7 +35,7 @@ export function DetailDialog() {
     if (scrollbar > 0) document.body.style.paddingRight = `${scrollbar}px`;
     panel.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') navigate(-1);
+      if (e.key === 'Escape' && !shareOpenRef.current) navigate(-1);
     };
     window.addEventListener('keydown', onKey);
     return () => {
