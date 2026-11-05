@@ -106,6 +106,69 @@ function seeAllLink(rail: RailJson, titleColor: string | null): { text: string; 
   };
 }
 
+/** The "View all" card at the end of a row: as big as the row's cards, its words in the middle with an arrow. */
+function EndCard({
+  rail,
+  width,
+  height,
+  onOpen,
+}: {
+  rail: RailJson;
+  width: number;
+  height: number;
+  onOpen: () => void;
+}) {
+  const sa = rail.seeAll;
+  const ink = sa.text?.color ?? '#ffffff';
+  return (
+    <button
+      type="button"
+      data-end-card
+      onClick={onOpen}
+      aria-label={sa.endCardLabel || 'View all'}
+      style={{
+        flex: '0 0 auto',
+        width,
+        height,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        padding: 12,
+        border: '1px solid rgba(255,255,255,0.28)',
+        borderRadius: 8,
+        background: 'rgba(255,255,255,0.08)',
+        color: ink,
+        cursor: 'pointer',
+        fontFamily: sa.text?.fontFamily ?? 'inherit',
+        fontWeight: sa.text?.fontWeight ?? 700,
+        fontSize: sa.text?.fontSize ?? 15,
+        textTransform: sa.text?.textCase === 'uppercase' ? 'uppercase' : undefined,
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          border: `1.5px solid ${ink}`,
+          fontSize: 20,
+          lineHeight: 1,
+        }}
+      >
+        ›
+      </span>
+      {sa.endCardLabel || 'View all'}
+    </button>
+  );
+}
+
 export function Rail({
   rail,
   blocks,
@@ -323,6 +386,11 @@ export function Rail({
                   onAction={onAction}
                 />
               ))}
+              {/* After the last card of a row that scrolls: only once its titles are here, and not when the
+                  tap goes nowhere. */}
+              {scrolls && rail.seeAll.endCard && loaded && rail.seeAll.tap?.type !== 'none' && (
+                <EndCard rail={rail} width={w} height={h} onOpen={() => onSeeAll(rail)} />
+              )}
             </div>
             {footer && spanning(footer)}
           </div>

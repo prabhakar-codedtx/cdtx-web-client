@@ -579,6 +579,10 @@ export interface Rail {
     position?: 'left' | 'right' | null;
     /** Adds the rail's title count: "See all (10)". Absent: yes. */
     showCount?: boolean;
+    /** A "View all" card after the last card of a rail that scrolls (never a hero or a grid): the size of the
+     * rail's own cards, its words in `endCardLabel`, and a tap that does what `tap` says. */
+    endCard?: boolean;
+    endCardLabel?: string | null;
     /** Font, size, weight, case and `color`. */
     text?: TextStyle | null;
   };
