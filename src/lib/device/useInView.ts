@@ -16,6 +16,9 @@ import { useEffect, useState } from 'react';
 export function useInView<T extends HTMLElement>(
   rootMargin = '600px 0px',
 ): [(el: T | null) => void, boolean] {
+  // The element itself, kept as state (a callback ref): when it appears after the first render, or
+  // is replaced, it is watched. (A ref object read once on mount missed such an element, and the
+  // rail then never loaded: e.g. Continue Watching on coming back from the player.)
   // The element is kept as state, not in a ref: a component that draws nothing at first (a rail
   // whose titles are not known yet) and its element later must still be watched once it appears.
   const [el, setEl] = useState<T | null>(null);

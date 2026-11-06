@@ -9,8 +9,20 @@ export interface Option {
   selected: boolean;
 }
 
+// What the viewer is told when the browser gives up on the video (`MediaError.code`).
+const MEDIA_ERRORS: Record<number, string> = {
+  1: 'Playback was stopped.',
+  2: "The video couldn't be loaded. Check the connection and try again.",
+  3: "The video couldn't be decoded.",
+  4: "This video's format or address isn't supported.",
+};
+
 export interface Media {
   playing: boolean;
+  /** Play was asked for but the video has no picture to show yet (still loading or stalled). */
+  buffering: boolean;
+  /** Why the video could not be played (the browser gave up on it), else null. */
+  failed: string | null;
   time: number;
   /** The stream's own duration, else the title's `durationSeconds`, else 0. */
   duration: number;
@@ -77,6 +89,12 @@ export function useMedia(v: HTMLVideoElement | null, fallbackDuration: number | 
       'ratechange',
       'loadedmetadata',
       'emptied',
+      // Loading: when it has to wait for data, when it can go on, and when it gives up.
+      'waiting',
+      'playing',
+      'canplay',
+      'stalled',
+      'error',
     ];
     for (const e of events) v.addEventListener(e, redraw);
     v.textTracks.addEventListener?.('change', redraw);
@@ -94,6 +112,9 @@ export function useMedia(v: HTMLVideoElement | null, fallbackDuration: number | 
 
   return {
     playing: Boolean(v && !v.paused && !v.ended),
+    // HAVE_FUTURE_DATA (3): enough to move on. Below that, a requested play is still waiting.
+    buffering: Boolean(v && !v.paused && !v.ended && !v.error && v.readyState < 3),
+    failed: v?.error ? (MEDIA_ERRORS[v.error.code] ?? "This video can't be played.") : null,
     time: v?.currentTime ?? 0,
     duration,
     volume: v?.volume ?? 1,

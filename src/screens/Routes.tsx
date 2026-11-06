@@ -11,11 +11,13 @@ function Screen({ slug, contentId, type }: { slug: string | undefined; contentId
   const dispatch = useAppDispatch();
   const dt = useDt();
   const entry = useAppSelector((s) => (slug ? s.pages.pages[pageKey(slug, contentId, dt)] : undefined));
+  const viewerVersion = useAppSelector((s) => s.pages.viewerVersion);
 
-  // Asked for again on every visit: what was published since reaches the next one.
+  // Asked for again on every visit (what was published since reaches the next one), and when the
+  // viewer's progress was saved (Continue Watching's count may have changed).
   useEffect(() => {
     if (slug) void dispatch(loadPage({ slug, contentId, type }));
-  }, [slug, contentId, type, dt, dispatch]);
+  }, [slug, contentId, type, dt, viewerVersion, dispatch]);
 
   if (!slug) return <div>There is nothing to show yet.</div>;
   if (entry?.data)

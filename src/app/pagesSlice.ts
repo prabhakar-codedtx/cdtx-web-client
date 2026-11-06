@@ -36,9 +36,14 @@ interface Entry<T> {
 interface PagesState {
   pages: Record<string, Entry<Page>>;
   items: Record<string, Entry<Title[]>>;
+  /** Goes up each time the viewer's own progress is saved: a screen showing it asks again. */
+  viewerVersion: number;
   /** The latest call for each rail's titles (its request id): an older answer that comes after it is dropped. */
   latest: Record<string, string>;
 }
+
+/** Rail sources whose titles are the viewer's own (they change as the viewer watches). */
+export const VIEWER_SOURCES: ReadonlySet<string> = new Set(['continue_watching']);
 
 const failure = (e: unknown): { error: string; code: number | null } => ({
   error: e instanceof Error ? e.message : 'Failed',
@@ -208,5 +213,6 @@ const slice = createSlice({
   },
 });
 
+export const { viewerChanged } = slice.actions;
 export default slice.reducer;
 export type { PagesState, Entry };
