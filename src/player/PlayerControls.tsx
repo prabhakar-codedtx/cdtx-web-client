@@ -101,6 +101,27 @@ const FEEDBACK_CSS = `
 [data-pc]:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,0.95), 0 0 0 5px rgba(234,106,0,0.7); }
 `;
 
+/** The volume button's design with the speaker drawn crossed out (muted): the design sends only the speaker. */
+function withMutedIcon(atom: Atom): Atom {
+  return {
+    ...atom,
+    style: {
+      ...atom.style,
+      layers: atom.style.layers.map((l) => {
+        if (l.type !== 'icon' || !l.icon) return l;
+        const paint = l.color ?? '#ffffff';
+        const svg =
+          `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${paint}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+          '<path d="M11 5 6 9H2v6h4l5 4V5z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>';
+        return {
+          ...l,
+          icon: { draw: 'as-is', svg: `data:image/svg+xml,${encodeURIComponent(svg)}`, vectorDrawable: null, png: [] },
+        };
+      }),
+    },
+  };
+}
+
 /** Play/Pause while playing: the design carries only the play icon, so the pause glyph is drawn here in
  * the same size and colour. */
 function withPauseIcon(atom: Atom): Atom {
@@ -250,6 +271,63 @@ export function PlayerControls({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ---- keyboard shortcuts (a browser with a keyboard): Space or K play / pause, Left and Right seek by
+  // `behaviour.seekStepSeconds`, Up and Down change the volume by `behaviour.volumeStepPercent`, M mutes.
+  // (F, full screen, is above.) A remote (`input: remote`) keeps the arrows for moving the focus, and a
+  // focused button keeps Space for pressing itself. While a panel is open the panel has the keys.
+  const keyMedia = useRef(media);
+  useEffect(() => {
+    keyMedia.current = media;
+  });
+  useEffect(() => {
+    if (open) return;
+    const step = Math.max(1, b.volumeStepPercent ?? 10) / 100;
+    const key = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target instanceof HTMLElement ? e.target : null;
+      const tag = el?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
+      const typing = tag === 'INPUT' && (el as HTMLInputElement).type !== 'range';
+      if (typing) return;
+      const onRange = tag === 'INPUT'; // a slider moves itself with the arrows
+      const onButton = tag === 'BUTTON' || el?.getAttribute('role') === 'button';
+      const m = keyMedia.current;
+      let handled = true;
+      switch (e.key) {
+        case ' ':
+        case 'k':
+        case 'K':
+          if (onButton) return; // Space presses the focused button
+          m.toggle();
+          break;
+        case 'ArrowLeft':
+        case 'ArrowRight':
+          if (b.input === 'remote' || onRange || ad) return; // an ad cannot be skipped over
+          m.seekBy(e.key === 'ArrowRight' ? b.seekStepSeconds : -b.seekStepSeconds);
+          break;
+        case 'ArrowUp':
+        case 'ArrowDown':
+          if (b.input === 'remote' || onRange) return;
+          // Read the element itself: a press right after another has not been drawn yet.
+          if (video?.muted ?? m.muted) m.toggleMute();
+          m.setVolume((video?.volume ?? m.volume) + (e.key === 'ArrowUp' ? step : -step));
+          break;
+        case 'm':
+        case 'M':
+          m.toggleMute();
+          break;
+        default:
+          handled = false;
+      }
+      if (!handled) return;
+      e.preventDefault(); // Space and the arrows would scroll the page
+      // The controls show again, as for any other input, then hide after `autoHideSeconds`.
+      surfaceRef.current?.dispatchEvent(new Event('keydown'));
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [open, ad, video, b.input, b.seekStepSeconds, b.volumeStepPercent, surfaceRef]);
   // The product's player may not have a Fullscreen control: the client then has its own button.
   const ownFullscreen = document.fullscreenEnabled && !config.controls.some((c) => c.id === 'fullscreen');
 
@@ -261,6 +339,7 @@ export function PlayerControls({
     );
     // The page order is the focus order, so Tab walks `behaviour.focusOrder`; without one (the
     // server no longer sends it) the controls keep the order they came in.
+    // The page order is the focus order, so Tab walks `behaviour.focusOrder`.
     const order = b.focusOrder ?? [];
     const at = (c: Control) => {
       const i = order.indexOf(c.id);
@@ -572,13 +651,29 @@ export function PlayerControls({
         </span>
       );
     }
-    // No design for Volume: the client's own Mute button and slider. With one, the design's icon is the
-    // mute button and the slider opens beside it on hover (`withVolumeSlider`).
-    if (c.id === 'volume' && c.config?.showSlider !== false && !c.look) {
+    if (c.id === 'volume' && c.config?.showSlider !== false) {
+      // The design's icon (a speaker; crossed out while muted) when the config has one, else plain words.
+      const volLook = c.look ? (media.muted ? withMutedIcon(c.look) : c.look) : null;
       return (
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-          <button type="button" data-focus onClick={(e) => press(c, e.currentTarget)}>
-            {media.muted ? 'Unmute' : 'Mute'}
+          <button
+            type="button"
+            data-focus
+            aria-label={media.muted ? 'Unmute' : 'Mute'}
+            onClick={(e) => press(c, e.currentTarget)}
+            style={
+              volLook
+                ? { all: 'unset', cursor: 'pointer', display: 'inline-flex', width: 44 * k, height: 44 * k }
+                : undefined
+            }
+          >
+            {volLook ? (
+              <AtomView atom={volLook} ctx={ctx} inFrame style={{ width: '100%', height: '100%' }} />
+            ) : media.muted ? (
+              'Unmute'
+            ) : (
+              'Mute'
+            )}
           </button>
           <input
             type="range"

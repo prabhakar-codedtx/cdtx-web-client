@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Atom, IconFiles, Layer, Title } from '@/lib/api/types';
 import { assetUrl } from '@/lib/api/endpoints';
 import { imageSrc, metaSegments, shown, titleText } from '@/lib/render/fields';
@@ -23,6 +23,9 @@ export interface PartCtx {
   onAction?: (action: string, title: Title | null) => void;
   /** A rail's header or footer: the rail's own title, for a text bound to `railTitle`. */
   railTitle?: string | null;
+  /** A part changed size (a description was opened): the card measures its parts again and moves the
+   * ones its layout rules put under it. */
+  onResize?: () => void;
 }
 
 const FLEX: Record<string, string> = {
@@ -113,7 +116,102 @@ function Icon({
 
 // ---- a box: a button, a pill, a badge --------------------------------------------------------
 
-function layerView(layer: Layer, i: number, ctx: PartCtx, focusColor: string | null): ReactNode {
+/**
+ * A text cut at some lines (`maxLines`) that can be opened: the link shows only when the text really is
+ * cut (measured, not assumed). Opening it lets the text grow to all its lines, so the parts under it move
+ * down (`onResize`); a tap on the link is not a tap on the card.
+ */
+function ExpandableText({
+  text,
+  style,
+  more,
+  less,
+  onResize,
+  onOpenChange,
+}: {
+  text: string;
+  style: CSSProperties;
+  more: string;
+  less: string;
+  onResize?: () => void;
+  /** The box this text is in: told when the text is open, so its designed height becomes a minimum. */
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+  const [cut, setCut] = useState(false);
+  const first = useRef(true);
+
+  // Is it cut? Measured while it is closed, and again when the font arrives or the width changes.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || open) return;
+    const measure = () => setCut(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    void document.fonts?.ready.then(measure);
+    return () => ro.disconnect();
+  }, [text, open, style.fontSize, style.fontFamily]);
+
+  // The size changed because it was opened or closed: the card places its parts again.
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    onOpenChange?.(open);
+    onResize?.();
+  }, [open, onResize, onOpenChange]);
+
+  const toggle = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setOpen((o) => !o);
+  };
+
+  return (
+    <span style={{ display: 'block' }}>
+      <span
+        ref={ref}
+        style={open ? { ...style, display: 'block', WebkitLineClamp: 'unset', overflow: 'visible' } : style}
+      >
+        {text}
+      </span>
+      {(cut || open) && (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') toggle(e);
+          }}
+          style={{
+            display: 'inline-block',
+            marginTop: 4,
+            cursor: 'pointer',
+            fontFamily: style.fontFamily,
+            fontSize: style.fontSize,
+            fontWeight: 700,
+            color: style.color,
+            textDecoration: 'underline',
+            pointerEvents: 'auto',
+          }}
+        >
+          {open ? less : more}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function layerView(
+  layer: Layer,
+  i: number,
+  ctx: PartCtx,
+  focusColor: string | null,
+  onOpenChange?: (open: boolean) => void,
+): ReactNode {
   const k = ctx.fit;
   const color = rgba(focusColor ?? layer.color);
   if (layer.type === 'icon') {
@@ -133,20 +231,22 @@ function layerView(layer: Layer, i: number, ctx: PartCtx, focusColor: string | n
         : titleText(ctx.title, layer.bind)
       : (layer.staticText ?? '');
     if (!text) return null;
-    const look = { ...textCss(layer.text, k), ...(color ? { color } : {}) };
-    // A cut text the design lets open ("See more"), e.g. a description.
-    if (layer.text?.expandable && layer.text.maxLines)
+    const style = { ...textCss(layer.text, k), ...(color ? { color } : {}) };
+    // Cut at `maxLines` with a link to open it, when the CMS says so.
+    if (layer.text?.expandable && layer.text.maxLines && layer.text.maxLines > 1)
       return (
         <ExpandableText
           key={i}
           text={text}
-          style={look}
-          moreLabel={layer.text.moreLabel || 'See more'}
-          lessLabel={layer.text.lessLabel || 'See less'}
+          style={style}
+          more={layer.text.moreLabel || 'See more'}
+          less={layer.text.lessLabel || 'See less'}
+          onResize={ctx.onResize}
+          onOpenChange={onOpenChange}
         />
       );
     return (
-      <span key={i} style={look}>
+      <span key={i} style={style}>
         {text}
       </span>
     );
@@ -191,22 +291,24 @@ function layerView(layer: Layer, i: number, ctx: PartCtx, focusColor: string | n
 const opens = (atom: Atom) =>
   Boolean(atom.style.text?.expandable) || atom.style.layers.some((l) => l.type === 'text' && l.text?.expandable);
 
-function sizeCss(atom: Atom, k: number): CSSProperties {
+function sizeCss(atom: Atom, k: number,grows = false): CSSProperties {
   const l = atom.style.layout;
   // A designed height is the least it takes when its text opens, so the text never spills over
   // the parts under it: they move down instead.
   const grows = opens(atom);
   const css: CSSProperties = {
     width: times(l.width, k),
+    // A text that is open grows its box: the designed height is then the least it is.
     height: grows ? undefined : times(l.height, k),
     minWidth: times(l.minWidth, k),
-    minHeight: grows ? (times(l.minHeight, k) ?? times(l.height, k)) : times(l.minHeight, k),
+    minHeight: grows ? times(l.height ?? l.minHeight, k) : times(l.minHeight, k),
   };
   return Object.values(css).some((v) => v !== undefined) ? { ...css, boxSizing: 'border-box' } : {};
 }
 
 function BoxPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSProperties }) {
   const [focused, setFocused] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
   const k = ctx.fit;
   const { layout, box } = atom.style;
   const order = (l: Layer) => (l.side === 'left' ? 0 : l.side === 'right' ? 2 : 1);
@@ -221,7 +323,7 @@ function BoxPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSPr
     alignItems: flexOf(layout.align),
     gap: times(layout.gap, k),
     ...paddingCss(layout.padding, k),
-    ...sizeCss(atom, k),
+    ...sizeCss(atom, k, textOpen),
     ...fillCss(f?.background ?? box.background),
     ...strokeCss(f?.border ?? box.border, k),
     borderRadius: times(box.cornerRadius, k),
@@ -231,7 +333,7 @@ function BoxPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSPr
       : {}),
     ...style,
   };
-  const content = layers.map((l, i) => layerView(l, i, ctx, f ? (l.focusColor ?? f.color) : null));
+  const content = layers.map((l, i) => layerView(l, i, ctx, f ? (l.focusColor ?? f.color) : null, setTextOpen));
   if (!atom.action) return <div style={css}>{content}</div>;
   const act = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { DialogRoomContext } from '@/lib/device/dialogContext';
 
 /** The live width of an element, so a rail sized "N cards across" is worked out from the room it has. */
 export function useElementWidth<T extends HTMLElement>(): [React.RefObject<T>, number] {
@@ -18,11 +19,12 @@ export function useElementWidth<T extends HTMLElement>(): [React.RefObject<T>, n
 
 /** The window's height, for a hero that fills the screen. */
 export function useViewportHeight(): number {
+  const room = useContext(DialogRoomContext);
   const [h, setH] = useState(() => window.innerHeight);
   useEffect(() => {
     const on = () => setH(window.innerHeight);
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
   }, []);
-  return h;
+  return room ? room.height : h;
 }

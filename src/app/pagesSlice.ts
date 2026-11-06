@@ -1,8 +1,16 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import { DETAIL_SCREEN, getDetailPage, getPage, getRailItems } from '@/lib/api/endpoints';
+import {
+  DETAIL_SCREEN,
+  getDetailPage,
+  getPage,
+  getRailItems,
+  getTabPage,
+  setWatchlist,
+} from '@/lib/api/endpoints';
+import { showToast } from '@/app/uiSlice';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { ApiError } from '@/lib/api/client';
-import type { Page, Title } from '@/lib/api/types';
+import type { Page, Rail, Title } from '@/lib/api/types';
 import type { RootState } from '@/app/store';
 
 export interface PageRequest {
@@ -30,6 +38,8 @@ interface PagesState {
   items: Record<string, Entry<Title[]>>;
   /** Goes up each time the viewer's own progress is saved: a screen showing it asks again. */
   viewerVersion: number;
+  /** The latest call for each rail's titles (its request id): an older answer that comes after it is dropped. */
+  latest: Record<string, string>;
 }
 
 /** Rail sources whose titles are the viewer's own (they change as the viewer watches). */
@@ -48,8 +58,10 @@ export const loadPage = createAsyncThunk<
 >(
   'pages/load',
   async (req, { getState, rejectWithValue }) => {
-    const launch = (getState() as RootState).launch.launch;
+    const { launch, tabs } = (getState() as RootState).launch;
     if (!launch) return rejectWithValue({ error: 'Not started', code: null });
+    // A tab from the tab bar opens through its own URL: the storefront it opens now.
+    const tab = tabs.find((t) => t.slug === req.slug && t.tabId && t.url);
     const ctx = getDeliveryContext();
     try {
       if (req.slug === DETAIL_SCREEN && req.contentId) {
@@ -57,6 +69,9 @@ export const loadPage = createAsyncThunk<
         if (!page)
           return rejectWithValue({ error: 'There is no detail page for this kind of title.', code: 404 });
         return { key: pageKey(req.slug, req.contentId, ctx.dt), page };
+      }
+      if (tab?.url && !req.contentId) {
+        return { key: pageKey(req.slug, req.contentId, ctx.dt), page: await getTabPage(tab.url) };
       }
       return {
         key: pageKey(req.slug, req.contentId, ctx.dt),
@@ -75,6 +90,15 @@ export const loadPage = createAsyncThunk<
   },
 );
 
+/**
+ * The rails whose titles are the viewer's own (`source.type`): My list and Continue Watching. They
+ * change without a publish (a title added here, in another tab, on another device, or watched), so
+ * they are asked for again each time they are shown, never taken from what was loaded before.
+ */
+const VIEWER_SOURCES = new Set(['my_list', 'continue_watching']);
+export const isViewerRail = (rail: Pick<Rail, 'source'>): boolean =>
+  VIEWER_SOURCES.has(rail.source.type ?? '');
+
 /** A rail's titles, by the rail's own `source.contentUrl` (complete as the server sent it). */
 export const loadItems = createAsyncThunk(
   'pages/items',
@@ -87,21 +111,65 @@ export const loadItems = createAsyncThunk(
   },
 );
 
+/** Whether the viewer has the title in their list, as the titles already loaded say (the server flags them). */
+function isSaved(state: PagesState, id: string): boolean {
+  for (const entry of Object.values(state.items)) {
+    const hit = entry.data?.find((t) => t.id === id);
+    if (hit) return Boolean(hit.badges?.inWatchlist);
+  }
+  return false;
+}
+
+/**
+ * The Add to watchlist button: add the title to the viewer's list, or take it out when it is there.
+ * Every loaded copy of the title is flipped at once so the button changes as it is tapped; when the
+ * call fails they are flipped back and a message says so. A "My list" rail is asked for again after.
+ */
+export const toggleWatchlist = createAsyncThunk<void, Title>(
+  'pages/watchlist',
+  async (title, { dispatch, getState }) => {
+    const state = (getState() as RootState).pages;
+    // What the pressed button showed ("Watchlist" or "In my list") is what is flipped: the copy it was
+    // drawn from, not the first copy found, which can be an older one (another rail, loaded before
+    // the list changed in another tab or on another device).
+    const shown = title.badges ? Boolean(title.badges.inWatchlist) : isSaved(state, title.id);
+    const saved = !shown;
+    dispatch(slice.actions.savedChanged({ id: title.id, saved }));
+    try {
+      await setWatchlist(title.id, saved);
+    } catch {
+      dispatch(slice.actions.savedChanged({ id: title.id, saved: !saved }));
+      dispatch(showToast(saved ? 'Could not add to your list.' : 'Could not remove from your list.'));
+      return;
+    }
+    dispatch(showToast(saved ? 'Added to your list.' : 'Removed from your list.'));
+    // A rail that lists the viewer's saved titles changed: fetch it again.
+    const rails = Object.values((getState() as RootState).pages.pages).flatMap((e) => e.data?.rails ?? []);
+    for (const r of rails) {
+      if (r.source.type === 'my_list' && r.source.contentUrl)
+        void dispatch(refreshItems(r.source.contentUrl));
+    }
+  },
+);
+
+/** A rail's titles again, kept on screen until the new ones come (unlike `loadItems`, which empties it). */
+export const refreshItems = createAsyncThunk('pages/refreshItems', async (contentUrl: string) => ({
+  contentUrl,
+  items: await getRailItems(contentUrl),
+}));
+
 const slice = createSlice({
   name: 'pages',
-  initialState: { pages: {}, items: {}, viewerVersion: 0 } as PagesState,
+  initialState: { pages: {}, items: {}, latest: {} } as PagesState,
   reducers: {
-    /**
-     * The viewer's progress was saved: the titles of the viewer's own rails (Continue Watching)
-     * are dropped, so they are asked for again when shown, and the pages are asked for again
-     * (a rail's count may have changed, e.g. 0 -> 1). Every other rail keeps its titles.
-     */
-    viewerChanged(s) {
-      s.viewerVersion += 1;
-      for (const entry of Object.values(s.pages)) {
-        for (const rail of entry.data?.rails ?? []) {
-          const url = rail.source?.contentUrl;
-          if (url && rail.source.type && VIEWER_SOURCES.has(rail.source.type)) delete s.items[url];
+    /** Every loaded copy of a title says whether the viewer saved it (exactly one of the two flags). */
+    savedChanged: (s, a: { payload: { id: string; saved: boolean } }) => {
+      for (const entry of Object.values(s.items)) {
+        for (const t of entry.data ?? []) {
+          if (t.id === a.payload.id && t.badges) {
+            t.badges.inWatchlist = a.payload.saved;
+            t.badges.notInWatchlist = !a.payload.saved;
+          }
         }
       }
     },
@@ -122,14 +190,26 @@ const slice = createSlice({
       s.pages[key] = { status: 'failed', data: s.pages[key]?.data ?? null, error: f.error, code: f.code };
     });
     b.addCase(loadItems.pending, (s, a) => {
+      s.latest[a.meta.arg] = a.meta.requestId;
       s.items[a.meta.arg] = { status: 'loading', data: null, error: null, code: null };
     });
+    b.addCase(refreshItems.pending, (s, a) => {
+      s.latest[a.meta.arg] = a.meta.requestId;
+    });
     b.addCase(loadItems.fulfilled, (s, a) => {
+      if (s.latest[a.meta.arg] !== a.meta.requestId) return;
+      s.items[a.payload.contentUrl] = { status: 'ready', data: a.payload.items, error: null, code: null };
+    });
+    b.addCase(refreshItems.fulfilled, (s, a) => {
+      // Add, then Remove at once: the list asked for after the Remove is the one kept.
+      if (s.latest[a.meta.arg] !== a.meta.requestId) return;
       s.items[a.payload.contentUrl] = { status: 'ready', data: a.payload.items, error: null, code: null };
     });
     b.addCase(loadItems.rejected, (s, a) => {
+      if (s.latest[a.meta.arg] !== a.meta.requestId) return;
       s.items[a.meta.arg] = { status: 'failed', data: null, error: a.error.message ?? 'Failed', code: null };
     });
+    // A refresh that fails keeps the titles already shown.
   },
 });
 

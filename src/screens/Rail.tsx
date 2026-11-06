@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { loadItems } from '@/app/pagesSlice';
+import { isViewerRail, loadItems, refreshItems } from '@/app/pagesSlice';
 import type { Atom, Block, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { useInView } from '@/lib/device/useInView';
@@ -72,6 +72,12 @@ function withLabel(atom: Atom, label: string | null): Atom {
   };
 }
 
+/** The link as just its arrow: the design's own icon when it has one (the words go), else a `›`. */
+function arrowOnly(atom: Atom): Atom {
+  if (!atom.style.layers.some((l) => l.type === 'icon')) return withLabel(atom, '›');
+  return { ...atom, style: { ...atom.style, layers: atom.style.layers.filter((l) => l.type !== 'text') } };
+}
+
 /**
  * A rail's "See all" link when no header design draws it: its words (`label`, with the count unless the
  * editor turned it off), as a text link (`label ›`), a button, or just an arrow, in the editor's text style
@@ -100,6 +106,96 @@ function seeAllLink(rail: RailJson, titleColor: string | null): { text: string; 
   };
 }
 
+/**
+ * The "View all" card at the end of a row, as big as the row's cards: its own design from the CMS
+ * (`seeAll.endCardBlockKey`, a Content Block of card type "View all card") when the rail picked one,
+ * else a plain card with its words in the middle and an arrow.
+ */
+function EndCard({
+  rail,
+  design,
+  width,
+  height,
+  onOpen,
+}: {
+  rail: RailJson;
+  design: Block | null;
+  width: number;
+  height: number;
+  onOpen: () => void;
+}) {
+  const sa = rail.seeAll;
+  if (design) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        data-end-card="design"
+        aria-label={sa.endCardLabel || 'View all'}
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        style={{ flex: '0 0 auto', width, height, cursor: 'pointer' }}
+      >
+        {/* No title: the design shows its own words and icon. */}
+        <CardView block={design} title={null} width={width} height={height} standalone />
+      </div>
+    );
+  }
+  const ink = sa.text?.color ?? '#ffffff';
+  return (
+    <button
+      type="button"
+      data-end-card
+      onClick={onOpen}
+      aria-label={sa.endCardLabel || 'View all'}
+      style={{
+        flex: '0 0 auto',
+        width,
+        height,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        padding: 12,
+        border: '1px solid rgba(255,255,255,0.28)',
+        borderRadius: 8,
+        background: 'rgba(255,255,255,0.08)',
+        color: ink,
+        cursor: 'pointer',
+        fontFamily: sa.text?.fontFamily ?? 'inherit',
+        fontWeight: sa.text?.fontWeight ?? 700,
+        fontSize: sa.text?.fontSize ?? 15,
+        textTransform: sa.text?.textCase === 'uppercase' ? 'uppercase' : undefined,
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          border: `1.5px solid ${ink}`,
+          fontSize: 20,
+          lineHeight: 1,
+        }}
+      >
+        ›
+      </span>
+      {sa.endCardLabel || 'View all'}
+    </button>
+  );
+}
+
 export function Rail({
   rail,
   blocks,
@@ -126,9 +222,25 @@ export function Rail({
   // No titles held: never asked, or dropped since (the viewer's own rails, after they watched).
   const missing = !entry;
 
+  // The viewer's own rails (My list, Continue Watching) are asked for again each time their screen is
+  // shown, at once (not when in view): what was loaded before may be out of date, and an empty list
+  // kept from before draws nothing, so it would never come into view to be asked again. The titles
+  // already there stay on screen until the new ones come. Any other rail is asked once, when near.
+  const viewer = isViewerRail(rail);
+  const refreshed = useRef(false);
   useEffect(() => {
     if (inView && url && hasTitles && missing) void dispatch(loadItems(url));
   }, [inView, url, hasTitles, missing, dispatch]);
+    if (!url || !hasTitles) return;
+    if (viewer && entry && !refreshed.current) {
+      refreshed.current = true;
+      void dispatch(refreshItems(url));
+      return;
+    }
+    if (inView) void dispatch(loadItems(url));
+    // `entry` only decides whether there is something to refresh; a change to it must not ask again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView, url, hasTitles, viewer, dispatch]);
 
   // Nothing to show (`count` 0, no design), or titles that came back empty or failed: no room taken.
   if (!hasTitles || !block) return null;
@@ -144,6 +256,8 @@ export function Rail({
   const layout = rail.layout === 'banner' || rail.layout === 'grid' ? rail.layout : 'carousel';
   const { w, h } = cardSize(rl, block, layout, lane, items.length);
   const gap = rl.gap ?? 0;
+  // The space the editor set between the title (or a header design) and the cards.
+  const headerGap = rl.headerGap ?? 0;
   const start = rl.start ?? 0;
   const end = rl.end ?? 0;
   const vertical = layout === 'carousel' && rl.direction === 'vertical';
@@ -170,6 +284,9 @@ export function Rail({
       if (action === 'see_all') onSeeAll(rail);
     },
   };
+  // "See all" as an arrow only (`seeAll.style: arrow`): the header design's link is a chevron right after
+  // the title, and the title and chevron are one link to the rail's titles.
+  const arrowOnlyLink = rail.seeAll.show && rail.seeAll.style === 'arrow';
   const strip = (b: Block) => {
     const s = b.card.strip;
     const along: Record<string, string> = {
@@ -184,8 +301,8 @@ export function Rail({
           display: 'flex',
           flexDirection: s?.direction === 'column' ? 'column' : 'row',
           alignItems: along[s?.align ?? ''] ?? 'center',
-          justifyContent: along[s?.distribute ?? ''] ?? 'flex-start',
-          gap: s?.gap ?? undefined,
+          justifyContent: arrowOnlyLink ? 'flex-start' : (along[s?.distribute ?? ''] ?? 'flex-start'),
+          gap: arrowOnlyLink ? 6 : (s?.gap ?? undefined),
           padding: `${s?.paddingY ?? 0}px ${s?.paddingX ?? 0}px`,
           width: lane,
           boxSizing: 'border-box',
@@ -196,12 +313,19 @@ export function Rail({
           // has one (`seeAll.show`), and in that rail's own words (`seeAll.label`).
           .filter((a) => a.action !== 'see_all' || rail.seeAll.show)
           .map((a) => (
-            <AtomView
+            <span
               key={a.id}
-              atom={a.action === 'see_all' ? withLabel(a, rail.seeAll.label) : a}
-              ctx={stripCtx}
-              inFrame={false}
-            />
+              onClick={arrowOnlyLink ? () => onSeeAll(rail) : undefined}
+              style={arrowOnlyLink ? { display: 'contents', cursor: 'pointer' } : { display: 'contents' }}
+            >
+              <AtomView
+                atom={
+                  a.action === 'see_all' ? (arrowOnlyLink ? arrowOnly(a) : withLabel(a, rail.seeAll.label)) : a
+                }
+                ctx={stripCtx}
+                inFrame={false}
+              />
+            </span>
           ))}
       </div>
     );
@@ -222,6 +346,8 @@ export function Rail({
       />
     ) : null;
 
+  const headerNode = header ? spanning(header) : null;
+
   // The link beside the title, as the rail's `seeAll` says, unless a header or footer design draws it.
   const sa = rail.seeAll;
   const designDraws = [header, footer].some(
@@ -231,7 +357,10 @@ export function Rail({
         b.components.some((c) => c.atoms.some((a) => a.action === 'see_all'))),
   );
   const link = sa.show && sa.label && !designDraws ? seeAllLink(rail, t.color) : null;
-  const linkLeft = sa.position === 'left';
+  // An arrow-only link sits right after the title, which is a link too (a chevron beside the heading);
+  // any other style is at the left or right end of the title row.
+  const inlineArrow = !!link && sa.style === 'arrow';
+  const linkLeft = !inlineArrow && sa.position === 'left';
 
   return (
     <section ref={inViewRef} aria-label={rail.title ?? undefined} style={fillCss(rail.background)}>
@@ -241,9 +370,10 @@ export function Rail({
             style={{
               display: 'flex',
               alignItems: 'baseline',
-              gap: 12,
+              gap: inlineArrow ? 6 : 12,
               paddingLeft: start,
               paddingRight: end,
+              marginBottom: headerGap,
             }}
           >
             {linkLeft && link && (
@@ -251,7 +381,16 @@ export function Rail({
                 {link.text}
               </button>
             )}
-            <div role="heading" aria-level={2} style={{ ...textCss(t), flex: '1 1 auto' }}>
+            <div
+              role="heading"
+              aria-level={2}
+              onClick={inlineArrow ? () => onSeeAll(rail) : undefined}
+              style={{
+                ...textCss(t),
+                flex: inlineArrow ? '0 1 auto' : '1 1 auto',
+                cursor: inlineArrow ? 'pointer' : undefined,
+              }}
+            >
               {!t.hidden ? rail.title : null}
             </div>
             {!linkLeft && link && (
@@ -263,7 +402,7 @@ export function Rail({
         ) : null}
         {available > 0 && (
           <div style={paddingCss(body)}>
-            {header && spanning(header)}
+            {headerNode && <div style={{ marginBottom: headerGap }}>{headerNode}</div>}
             <div
               ref={rowRef}
               style={{
@@ -292,6 +431,17 @@ export function Rail({
                   onAction={onAction}
                 />
               ))}
+              {/* After the last card of a row that scrolls: only once its titles are here, and not when the
+                  tap goes nowhere. */}
+              {scrolls && rail.seeAll.endCard && loaded && rail.seeAll.tap?.type !== 'none' && (
+                <EndCard
+                  rail={rail}
+                  design={rail.seeAll.endCardBlockKey ? (blocks[rail.seeAll.endCardBlockKey] ?? null) : null}
+                  width={w}
+                  height={h}
+                  onOpen={() => onSeeAll(rail)}
+                />
+              )}
             </div>
             {footer && spanning(footer)}
           </div>
