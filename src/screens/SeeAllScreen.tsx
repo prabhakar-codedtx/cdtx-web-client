@@ -7,7 +7,7 @@ import { fillCss, textCss } from '@/lib/render/paint';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { CardView } from '@/render/CardView';
-import { NAV_HEIGHT } from '@/screens/navMetrics';
+import { navTopRoom } from '@/screens/navMetrics';
 import { cardSize } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
 
@@ -42,6 +42,7 @@ export function SeeAllScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const launch = useAppSelector((s) => s.launch.launch);
+  const topRoom = navTopRoom(useAppSelector((s) => s.launch.navStyle));
   const { open, act } = useTitleActions();
   const sent = location.state as {
     rail?: Rail;
@@ -148,10 +149,7 @@ export function SeeAllScreen() {
 
   if (failed) {
     return (
-      <main
-        ref={widthRef}
-        style={{ ...frame, padding: d.sidePadding, paddingTop: NAV_HEIGHT + d.sidePadding }}
-      >
+      <main ref={widthRef} style={{ ...frame, padding: d.sidePadding, paddingTop: topRoom + d.sidePadding }}>
         <div role="alert">
           <strong>This list isn&apos;t available.</strong>{' '}
           <Link to="/" style={{ color: ink }}>
@@ -163,10 +161,7 @@ export function SeeAllScreen() {
   }
   if (!rail)
     return (
-      <main
-        ref={widthRef}
-        style={{ ...frame, padding: d.sidePadding, paddingTop: NAV_HEIGHT + d.sidePadding }}
-      >
+      <main ref={widthRef} style={{ ...frame, padding: d.sidePadding, paddingTop: topRoom + d.sidePadding }}>
         Loading…
       </main>
     );
@@ -180,7 +175,7 @@ export function SeeAllScreen() {
   const name = rail.title || rail.seeAll.label || 'All titles';
 
   return (
-    <main ref={widthRef} style={{ ...frame, paddingTop: NAV_HEIGHT }}>
+    <main ref={widthRef} style={{ ...frame, paddingTop: topRoom }}>
       <div style={{ padding: `${d.topPadding}px ${side}px ${d.bottomPadding}px` }}>
         <div
           style={{
