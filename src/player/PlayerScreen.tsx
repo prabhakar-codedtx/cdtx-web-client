@@ -181,10 +181,10 @@ export function PlayerScreen() {
               >
                 <div
                   style={{
-                    width: 44,
-                    height: 44,
+                    width: 132,
+                    height: 132,
                     borderRadius: '50%',
-                    border: '5px solid rgba(255, 255, 255, 0.2)',
+                    border: '4px solid rgba(255, 255, 255, 0.2)',
                     borderTopColor: '#ffffff',
                     animation: 'cdtx-spin 0.9s linear infinite',
                   }}

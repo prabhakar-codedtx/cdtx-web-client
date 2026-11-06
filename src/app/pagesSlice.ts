@@ -36,14 +36,11 @@ interface Entry<T> {
 interface PagesState {
   pages: Record<string, Entry<Page>>;
   items: Record<string, Entry<Title[]>>;
-  /** Goes up each time the viewer's own progress is saved: a screen showing it asks again. */
-  viewerVersion: number;
   /** The latest call for each rail's titles (its request id): an older answer that comes after it is dropped. */
   latest: Record<string, string>;
+  /** Goes up each time the viewer's own progress is saved: a screen showing it asks again. */
+  viewerVersion: number;
 }
-
-/** Rail sources whose titles are the viewer's own (they change as the viewer watches). */
-export const VIEWER_SOURCES: ReadonlySet<string> = new Set(['continue_watching']);
 
 const failure = (e: unknown): { error: string; code: number | null } => ({
   error: e instanceof Error ? e.message : 'Failed',
@@ -160,7 +157,7 @@ export const refreshItems = createAsyncThunk('pages/refreshItems', async (conten
 
 const slice = createSlice({
   name: 'pages',
-  initialState: { pages: {}, items: {}, latest: {} } as PagesState,
+  initialState: { pages: {}, items: {}, latest: {}, viewerVersion: 0 } as PagesState,
   reducers: {
     /** Every loaded copy of a title says whether the viewer saved it (exactly one of the two flags). */
     savedChanged: (s, a: { payload: { id: string; saved: boolean } }) => {
@@ -170,6 +167,20 @@ const slice = createSlice({
             t.badges.inWatchlist = a.payload.saved;
             t.badges.notInWatchlist = !a.payload.saved;
           }
+        }
+      }
+    },
+    /**
+     * The viewer's progress was saved: Continue Watching's titles are dropped, so they are asked for
+     * again when shown, and the pages are asked for again (a rail's count may have changed, e.g.
+     * 0 -> 1). Every other rail keeps its titles.
+     */
+    viewerChanged(s) {
+      s.viewerVersion += 1;
+      for (const entry of Object.values(s.pages)) {
+        for (const rail of entry.data?.rails ?? []) {
+          const url = rail.source?.contentUrl;
+          if (url && rail.source.type === 'continue_watching') delete s.items[url];
         }
       }
     },

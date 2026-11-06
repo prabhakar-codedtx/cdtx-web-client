@@ -219,8 +219,6 @@ export function Rail({
   const url = rail.source.contentUrl ?? '';
   const hasTitles = (rail.source.count ?? 0) > 0;
   const entry = useAppSelector((s) => s.pages.items[url]);
-  // No titles held: never asked, or dropped since (the viewer's own rails, after they watched).
-  const missing = !entry;
 
   // The viewer's own rails (My list, Continue Watching) are asked for again each time their screen is
   // shown, at once (not when in view): what was loaded before may be out of date, and an empty list
@@ -229,8 +227,6 @@ export function Rail({
   const viewer = isViewerRail(rail);
   const refreshed = useRef(false);
   useEffect(() => {
-    if (inView && url && hasTitles && missing) void dispatch(loadItems(url));
-  }, [inView, url, hasTitles, missing, dispatch]);
     if (!url || !hasTitles) return;
     if (viewer && entry && !refreshed.current) {
       refreshed.current = true;

@@ -274,10 +274,6 @@ export interface TextStyle {
   align: 'left' | 'center' | 'right' | string | null;
   textCase: 'none' | 'uppercase' | 'lowercase' | 'capitalize' | string | null;
   maxLines: number | null;
-  /** Cut at `maxLines`, the text offers `moreLabel` to show it whole (`lessLabel` cuts it again). */
-  expandable?: boolean | null;
-  moreLabel?: string | null;
-  lessLabel?: string | null;
   shadows: Shadow[];
   /** Cut at `maxLines` and, when the text really is cut, show `moreLabel` to open it (`lessLabel` to cut it again). */
   expandable?: boolean | null;
