@@ -303,12 +303,18 @@ function TabLink({
       end
       role={role}
       aria-label={iconOnly ? (tab.title ?? tab.slug) : undefined}
-      style={{ ...itemStyle(style, active, style.placement === 'left'), flex: grow ? '1 1 0' : undefined }}
+      style={{
+        // A sidebar and the dropdown's list are lists: each row starts at the left, so the icons
+        // line up in one column and the names start at one edge.
+        ...itemStyle(style, active, style.placement === 'left' || role === 'menuitem'),
+        flex: grow ? '1 1 0' : undefined,
+      }}
     >
       {src ? (
         <img src={src} alt="" width={size} height={size} draggable={false} />
-      ) : layout === 'iconAbove' ? (
-        // No icon on this tab: its space stays, so every label in the bar lines up.
+      ) : layout === 'iconAbove' ||
+        (layout === 'iconText' && (role === 'menuitem' || style.placement === 'left')) ? (
+        // No icon on this tab: its space stays, so every label in the bar (or list) lines up.
         <span aria-hidden style={{ width: size, height: size }} />
       ) : null}
       {layout !== 'icon' && <span>{tab.title ?? tab.slug}</span>}
