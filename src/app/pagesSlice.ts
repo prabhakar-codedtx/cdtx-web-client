@@ -10,7 +10,7 @@ import {
 import { showToast } from '@/app/uiSlice';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { ApiError } from '@/lib/api/client';
-import type { Page, Title } from '@/lib/api/types';
+import type { Page, Rail, Title } from '@/lib/api/types';
 import type { RootState } from '@/app/store';
 
 export interface PageRequest {
@@ -36,6 +36,8 @@ interface Entry<T> {
 interface PagesState {
   pages: Record<string, Entry<Page>>;
   items: Record<string, Entry<Title[]>>;
+  /** The latest call for each rail's titles (its request id): an older answer that comes after it is dropped. */
+  latest: Record<string, string>;
 }
 
 const failure = (e: unknown): { error: string; code: number | null } => ({
@@ -83,6 +85,15 @@ export const loadPage = createAsyncThunk<
   },
 );
 
+/**
+ * The rails whose titles are the viewer's own (`source.type`): My list and Continue Watching. They
+ * change without a publish (a title added here, in another tab, on another device, or watched), so
+ * they are asked for again each time they are shown, never taken from what was loaded before.
+ */
+const VIEWER_SOURCES = new Set(['my_list', 'continue_watching']);
+export const isViewerRail = (rail: Pick<Rail, 'source'>): boolean =>
+  VIEWER_SOURCES.has(rail.source.type ?? '');
+
 /** A rail's titles, by the rail's own `source.contentUrl` (complete as the server sent it). */
 export const loadItems = createAsyncThunk(
   'pages/items',
@@ -113,7 +124,11 @@ export const toggleWatchlist = createAsyncThunk<void, Title>(
   'pages/watchlist',
   async (title, { dispatch, getState }) => {
     const state = (getState() as RootState).pages;
-    const saved = !isSaved(state, title.id);
+    // What the pressed button showed ("Watchlist" or "In my list") is what is flipped: the copy it was
+    // drawn from, not the first copy found, which can be an older one (another rail, loaded before
+    // the list changed in another tab or on another device).
+    const shown = title.badges ? Boolean(title.badges.inWatchlist) : isSaved(state, title.id);
+    const saved = !shown;
     dispatch(slice.actions.savedChanged({ id: title.id, saved }));
     try {
       await setWatchlist(title.id, saved);
@@ -140,7 +155,7 @@ export const refreshItems = createAsyncThunk('pages/refreshItems', async (conten
 
 const slice = createSlice({
   name: 'pages',
-  initialState: { pages: {}, items: {} } as PagesState,
+  initialState: { pages: {}, items: {}, latest: {} } as PagesState,
   reducers: {
     /** Every loaded copy of a title says whether the viewer saved it (exactly one of the two flags). */
     savedChanged: (s, a: { payload: { id: string; saved: boolean } }) => {
@@ -170,17 +185,26 @@ const slice = createSlice({
       s.pages[key] = { status: 'failed', data: s.pages[key]?.data ?? null, error: f.error, code: f.code };
     });
     b.addCase(loadItems.pending, (s, a) => {
+      s.latest[a.meta.arg] = a.meta.requestId;
       s.items[a.meta.arg] = { status: 'loading', data: null, error: null, code: null };
     });
+    b.addCase(refreshItems.pending, (s, a) => {
+      s.latest[a.meta.arg] = a.meta.requestId;
+    });
     b.addCase(loadItems.fulfilled, (s, a) => {
+      if (s.latest[a.meta.arg] !== a.meta.requestId) return;
       s.items[a.payload.contentUrl] = { status: 'ready', data: a.payload.items, error: null, code: null };
     });
     b.addCase(refreshItems.fulfilled, (s, a) => {
+      // Add, then Remove at once: the list asked for after the Remove is the one kept.
+      if (s.latest[a.meta.arg] !== a.meta.requestId) return;
       s.items[a.payload.contentUrl] = { status: 'ready', data: a.payload.items, error: null, code: null };
     });
     b.addCase(loadItems.rejected, (s, a) => {
+      if (s.latest[a.meta.arg] !== a.meta.requestId) return;
       s.items[a.meta.arg] = { status: 'failed', data: null, error: a.error.message ?? 'Failed', code: null };
     });
+    // A refresh that fails keeps the titles already shown.
   },
 });
 
