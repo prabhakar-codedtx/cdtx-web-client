@@ -1,11 +1,22 @@
 import { http } from '@/lib/api/client';
 import { API_BASE, DETAIL_PAGES, PRODUCT } from '@/lib/config';
 import type { PlayerConfig } from '@/lib/api/player';
-import type { DeliveryContext, Envelope, LaunchConfig, NavPage, Page, Theme, Title } from '@/lib/api/types';
+import type {
+  DeliveryContext,
+  Envelope,
+  LaunchConfig,
+  NavBarStyle,
+  NavPage,
+  Page,
+  Theme,
+  Title,
+} from '@/lib/api/types';
 
 /** What the client reads from the launch config: the addresses of the other calls and the flags. */
 export interface Launch {
   pagesURL: string;
+  /** The tab bar (tabs by id, and how the bar looks); null on an older server (then `pagesURL`). */
+  tabsURL: string | null;
   pageURL: string;
   /**
    * Every title's detail screen, whatever its type: `…/detail?contentId={content_id}`. The server
@@ -72,6 +83,7 @@ export async function getLaunch(ctx: DeliveryContext): Promise<Launch> {
   };
   return {
     pagesURL: text('pagesURL'),
+    tabsURL: typeof byKey.tabsURL === 'string' ? text('tabsURL') : null,
     pageURL: text('pageURL'),
     detailURL: typeof byKey.detailURL === 'string' ? text('detailURL') : null,
     designSystemURL: typeof byKey.designSystemURL === 'string' ? text('designSystemURL') : null,
@@ -117,9 +129,61 @@ export async function getDesignSystem(launch: Launch, ctx: DeliveryContext): Pro
 }
 
 /** Call 2: the tabs, in order. */
-export async function getTabs(launch: Launch, ctx: DeliveryContext): Promise<NavPage[]> {
+export async function getTabs(
+  launch: Launch,
+  ctx: DeliveryContext,
+): Promise<{ tabs: NavPage[]; style: NavBarStyle | null }> {
+  // The tab bar: each tab by its id, opening the storefront it opens now, and the bar's design.
+  if (launch.tabsURL) {
+    const { data } = await http.get<Envelope<TabBar>>(path(launch.tabsURL), { params: ctx });
+    const bar = data.data[0];
+    return {
+      style: bar?.style ?? null,
+      tabs: (bar?.tabs ?? []).map((t) => ({
+        slug: t.key,
+        title: t.title,
+        icon: t.icon,
+        position: t.position,
+        isDefault: t.isDefault,
+        version: null,
+        versionLabel: null,
+        publishedAt: null,
+        url: t.url,
+        tabId: t.tabId,
+      })),
+    };
+  }
+  // An older server: its pages are the tabs.
   const { data } = await http.get<Envelope<NavPage>>(path(launch.pagesURL), { params: ctx });
-  return data.data;
+  return { tabs: data.data, style: null };
+}
+
+/** `GET {tabsURL}`: one object, the bar's design for this device and its tabs. */
+interface TabBar {
+  style: NavBarStyle | null;
+  tabs: {
+    tabId: string;
+    key: string;
+    title: string;
+    icon: string | null;
+    position: number;
+    isDefault: boolean;
+    url: string;
+  }[];
+}
+
+/**
+ * Call 3 for a tab: the storefront the tab opens now (`tab.url`). `start`: the next rows;
+ * `storefrontId`: the one being drawn, so a tab swapped meanwhile answers its new one from the top.
+ */
+export async function getTabPage(
+  url: string,
+  opts: { start?: number; storefrontId?: string } = {},
+): Promise<Page> {
+  const { data } = await http.get<Envelope<Page>>(path(url), { params: opts });
+  const page = data.data[0];
+  if (!page) throw new Error('Page not found');
+  return page;
 }
 
 /** Call 3: one screen. `contentId` is the title a detail screen is opened for; `start` the next rows. */

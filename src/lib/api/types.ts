@@ -76,6 +76,47 @@ export interface NavPage {
   publishedAt: string | null;
   /** The page call, complete (relative to the API host). */
   url: string | null;
+  /**
+   * From the tab bar (`tabsURL`): the tab's id. Its `url` then opens the storefront the tab opens
+   * now, and `slug` is the tab's readable key (`home`, `live-tv`). Absent on an older server's nav.
+   */
+  tabId?: string;
+}
+
+/** How the tab bar looks on this device (`GET {tabsURL}` → `style`; Design System → Navigation). */
+export interface NavBarStyle {
+  placement: 'top' | 'bottom' | 'left' | 'dropdown';
+  itemLayout: 'iconText' | 'iconAbove' | 'icon' | 'text';
+  align: 'start' | 'center' | 'spread';
+  /** px. */
+  iconSize: number | null;
+  text: NavBarText | null;
+  activeText: NavBarText | null;
+  textCase: 'none' | 'upper' | 'lower' | 'capitalize';
+  background: { color: string | null; gradient: string | null };
+  divider: boolean;
+  itemColor: string | null;
+  activeColor: string | null;
+  activeBackground: string | null;
+  indicator: {
+    type: 'underline' | 'pill' | 'background' | 'sidebar' | 'none';
+    color: string | null;
+    thickness: number;
+  };
+  gap: number;
+  /** Around the bar's edge, px: each side (one number from an older server). */
+  padding: number | { top: number; right: number; bottom: number; left: number };
+  /** The bar's height; a sidebar's width (px). */
+  size: number;
+  logo: boolean;
+  collapsed: boolean;
+}
+
+export interface NavBarText {
+  fontFamily: string | null;
+  fontSize: number | null;
+  fontWeight: number | null;
+  letterSpacing: number | null;
 }
 
 // ---- titles (`GET rail.source.contentUrl`) ---------------------------------------------------
@@ -606,6 +647,10 @@ export interface Rail {
 
 export interface Page {
   schemaVersion: number;
+  /** Opened as a tab (`tab.url`): the tab, and the storefront it opens now. */
+  tabId?: string;
+  storefrontId?: string;
+  storefrontSlug?: string;
   id: string | null;
   product: string | null;
   slug: string | null;

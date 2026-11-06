@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { getDesignSystem, getLaunch, getTabs, type Launch } from '@/lib/api/endpoints';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
-import type { NavPage, Theme } from '@/lib/api/types';
+import type { NavBarStyle, NavPage, Theme } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
 
 interface LaunchState {
@@ -11,23 +11,33 @@ interface LaunchState {
   /** The Design System: the fonts to load and the default font. */
   theme: Theme | null;
   tabs: NavPage[];
+  /** How the tab bar looks on this device; null: the client's own look (an older server). */
+  navStyle: NavBarStyle | null;
   /** The device the launch config and tabs were asked for; another device asks again. */
   dt: string | null;
 }
 
-const initial: LaunchState = { status: 'idle', error: null, launch: null, theme: null, tabs: [], dt: null };
+const initial: LaunchState = {
+  status: 'idle',
+  error: null,
+  launch: null,
+  theme: null,
+  tabs: [],
+  navStyle: null,
+  dt: null,
+};
 
 /** Start: the launch config (the one address the client knows), the Design System, then the tabs. */
 export const boot = createAsyncThunk('launch/boot', async (_: void, { getState }) => {
   const ctx = getDeliveryContext();
   const state = (getState() as { launch: LaunchState }).launch;
   const launch = state.launch && state.dt === ctx.dt ? state.launch : await getLaunch(ctx);
-  const [theme, tabs] = await Promise.all([
+  const [theme, bar] = await Promise.all([
     // A Design System that cannot be read leaves the page drawn without its fonts, not blank.
     getDesignSystem(launch, ctx).catch(() => null),
     getTabs(launch, ctx),
   ]);
-  return { launch, theme, tabs, dt: ctx.dt };
+  return { launch, theme, tabs: bar.tabs, navStyle: bar.style, dt: ctx.dt };
 });
 
 const slice = createSlice({
@@ -44,6 +54,7 @@ const slice = createSlice({
       s.launch = a.payload.launch;
       s.theme = a.payload.theme;
       s.tabs = a.payload.tabs;
+      s.navStyle = a.payload.navStyle;
       s.dt = a.payload.dt;
     });
     b.addCase(boot.rejected, (s, a) => {

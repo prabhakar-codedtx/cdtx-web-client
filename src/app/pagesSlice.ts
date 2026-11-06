@@ -1,5 +1,12 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import { DETAIL_SCREEN, getDetailPage, getPage, getRailItems, setWatchlist } from '@/lib/api/endpoints';
+import {
+  DETAIL_SCREEN,
+  getDetailPage,
+  getPage,
+  getRailItems,
+  getTabPage,
+  setWatchlist,
+} from '@/lib/api/endpoints';
 import { showToast } from '@/app/uiSlice';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { ApiError } from '@/lib/api/client';
@@ -44,8 +51,10 @@ export const loadPage = createAsyncThunk<
 >(
   'pages/load',
   async (req, { getState, rejectWithValue }) => {
-    const launch = (getState() as RootState).launch.launch;
+    const { launch, tabs } = (getState() as RootState).launch;
     if (!launch) return rejectWithValue({ error: 'Not started', code: null });
+    // A tab from the tab bar opens through its own URL: the storefront it opens now.
+    const tab = tabs.find((t) => t.slug === req.slug && t.tabId && t.url);
     const ctx = getDeliveryContext();
     try {
       if (req.slug === DETAIL_SCREEN && req.contentId) {
@@ -53,6 +62,9 @@ export const loadPage = createAsyncThunk<
         if (!page)
           return rejectWithValue({ error: 'There is no detail page for this kind of title.', code: 404 });
         return { key: pageKey(req.slug, req.contentId, ctx.dt), page };
+      }
+      if (tab?.url && !req.contentId) {
+        return { key: pageKey(req.slug, req.contentId, ctx.dt), page: await getTabPage(tab.url) };
       }
       return {
         key: pageKey(req.slug, req.contentId, ctx.dt),

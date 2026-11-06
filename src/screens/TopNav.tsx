@@ -4,6 +4,7 @@ import { useAppSelector } from '@/app/hooks';
 import { path } from '@/lib/api/endpoints';
 import { PRODUCT } from '@/lib/config';
 import { NAV_HEIGHT } from '@/screens/navMetrics';
+import { StyledNav } from '@/screens/StyledNav';
 
 /**
  * The tab bar: the product's name, then the tabs the API lists (`title`, order, which is the default),
@@ -39,7 +40,27 @@ const CSS = `
 .nav-back:active { transform: scale(0.94); }
 `;
 
+/** The tab bar: the CMS's design (`StyledNav`) when the server sends one, else the client's own. */
 export function TopNav() {
+  const style = useAppSelector((s) => s.launch.navStyle);
+  const tabs = useAppSelector((s) => s.launch.tabs);
+  const raw = useAppSelector((s) => s.launch.launch?.raw);
+  if (style) {
+    return (
+      <StyledNav
+        style={style}
+        tabs={tabs}
+        brandName={typeof raw?.productName === 'string' && raw.productName ? raw.productName : PRODUCT}
+        brandImage={typeof raw?.productImage === 'string' && raw.productImage ? raw.productImage : null}
+        iconTemplate={typeof raw?.iconFileURL === 'string' ? raw.iconFileURL : null}
+      />
+    );
+  }
+  return <ClientNav />;
+}
+
+/** The client's own tab bar, for a server that sends no design. */
+function ClientNav() {
   const tabs = useAppSelector((s) => s.launch.tabs);
   const theme = useAppSelector((s) => s.launch.theme);
   // The product's brand from the CMS: its image, else its name (the key only before launch loads).
