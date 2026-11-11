@@ -20,9 +20,17 @@ function Screen({ slug, contentId, type }: { slug: string | undefined; contentId
   }, [slug, contentId, type, dt, viewerVersion, dispatch]);
 
   if (!slug) return <div>There is nothing to show yet.</div>;
+  // Keyed by the device too: a page asked for as another device is another page, so the rows the old one
+  // had added below (asked for as the old device) are not kept under the new one.
   if (entry?.data)
     return (
-      <PageScreen key={`${slug}|${contentId ?? ''}`} screen={slug} page={entry.data} contentId={contentId} />
+      <PageScreen
+        key={`${slug}|${contentId ?? ''}|${dt}`}
+        screen={slug}
+        page={entry.data}
+        contentId={contentId}
+        dt={dt}
+      />
     );
   if (entry?.status === 'failed') {
     return (

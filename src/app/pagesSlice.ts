@@ -10,6 +10,7 @@ import {
 import { showToast } from '@/app/uiSlice';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { ApiError } from '@/lib/api/client';
+import { limiter, wait, worthRetrying } from '@/lib/api/queue';
 import type { Page, Rail, Title } from '@/lib/api/types';
 import type { RootState } from '@/app/store';
 
@@ -96,10 +97,33 @@ const VIEWER_SOURCES = new Set(['my_list', 'continue_watching']);
 export const isViewerRail = (rail: Pick<Rail, 'source'>): boolean =>
   VIEWER_SOURCES.has(rail.source.type ?? '');
 
+/**
+ * The rails' title calls go out a few at a time: twenty at once (a long Home screen scrolled fast)
+ * went past the browser's connections per server and the backend's database, and most timed out.
+ */
+const railCalls = limiter(4);
+/** How long a rail whose titles did not come waits before it asks once more. */
+const RETRY_AFTER_MS = 2000;
+
+/**
+ * One rail's titles, in turn with the other rails. A call that got no answer, or the server's own
+ * failure, is asked once more after a short wait (a moment's network drop must not lose the rail for
+ * the whole visit); a second failure, or a 4xx, is final. The wait does not hold a place in the queue.
+ */
+async function fetchRailItems(contentUrl: string): Promise<Title[]> {
+  try {
+    return await railCalls(() => getRailItems(contentUrl));
+  } catch (e) {
+    if (!worthRetrying(e)) throw e;
+    await wait(RETRY_AFTER_MS);
+    return railCalls(() => getRailItems(contentUrl));
+  }
+}
+
 /** A rail's titles, by the rail's own `source.contentUrl` (complete as the server sent it). */
 export const loadItems = createAsyncThunk(
   'pages/items',
-  async (contentUrl: string) => ({ contentUrl, items: await getRailItems(contentUrl) }),
+  async (contentUrl: string) => ({ contentUrl, items: await fetchRailItems(contentUrl) }),
   {
     condition: (url, { getState }) => {
       const e = (getState() as RootState).pages.items[url];
@@ -152,7 +176,7 @@ export const toggleWatchlist = createAsyncThunk<void, Title>(
 /** A rail's titles again, kept on screen until the new ones come (unlike `loadItems`, which empties it). */
 export const refreshItems = createAsyncThunk('pages/refreshItems', async (contentUrl: string) => ({
   contentUrl,
-  items: await getRailItems(contentUrl),
+  items: await fetchRailItems(contentUrl),
 }));
 
 const slice = createSlice({

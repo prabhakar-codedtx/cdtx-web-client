@@ -3,6 +3,7 @@ import type { Atom, IconFiles, Layer, Title } from '@/lib/api/types';
 import { assetUrl } from '@/lib/api/endpoints';
 import { imageSrc, metaSegments, shown, titleText } from '@/lib/render/fields';
 import { fillCss, objectFitCss, paddingCss, rgba, strokeCss, textCss } from '@/lib/render/paint';
+import { Img, type ImgPriority } from '@/render/Img';
 
 /**
  * The atoms a card is made of, each drawn only from its JSON (`atom.type`: text, box, meta, image).
@@ -25,6 +26,8 @@ export interface PartCtx {
   /** A part changed size (a description was opened): the card measures its parts again and moves the
    * ones its layout rules put under it. */
   onResize?: () => void;
+  /** How soon the card's pictures load (`Img`): lazy unless the card is on screen when the page opens. */
+  priority?: ImgPriority;
 }
 
 const FLEX: Record<string, string> = {
@@ -325,7 +328,9 @@ function BoxPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSPr
       : {}),
     ...style,
   };
-  const content = layers.map((l, i) => layerView(l, i, ctx, f ? (l.focusColor ?? f.color) : null, setTextOpen));
+  const content = layers.map((l, i) =>
+    layerView(l, i, ctx, f ? (l.focusColor ?? f.color) : null, setTextOpen),
+  );
   if (!atom.action) return <div style={css}>{content}</div>;
   const act = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
@@ -357,14 +362,17 @@ function BoxPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSPr
 
 function TextPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSProperties }) {
   const k = ctx.fit;
+  // A logo that would not load: the title's name is written instead (the logo stays hidden until it arrives).
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
   // The title's logo instead of its name, in a `titleSlot`-high box, when it has one.
   const logo = logoOf(atom, ctx.title);
-  if (logo)
+  if (logo && logo !== failedLogo)
     return (
-      <img
+      <Img
         src={logo}
+        priority={ctx.priority}
         alt={ctx.title?.title ?? ''}
-        draggable={false}
+        onError={() => setFailedLogo(logo)}
         style={{
           height: times(atom.titleSlot, k),
           maxWidth: '100%',
@@ -472,10 +480,9 @@ function ImagePart({
       ? Object.fromEntries(named.map((c) => [c, r]))
       : { borderRadius: r };
   return (
-    <img
+    <Img
       src={src}
-      alt=""
-      draggable={false}
+      priority={ctx.priority}
       style={{
         display: 'block',
         boxSizing: 'border-box',

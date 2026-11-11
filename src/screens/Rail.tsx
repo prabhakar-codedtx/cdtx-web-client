@@ -202,19 +202,23 @@ export function Rail({
   onOpen,
   onAction,
   onSeeAll,
+  eager = false,
 }: {
   rail: RailJson;
   blocks: Record<string, Block>;
   onOpen: (title: Title, rail: RailJson) => void;
   onAction: (action: string, title: Title | null) => void;
   onSeeAll: (rail: RailJson) => void;
+  /** The page's first row: the cards on screen load their pictures at once, not lazily. */
+  eager?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const block = rail.blockKey ? (blocks[rail.blockKey] ?? null) : null;
   const header = rail.headerKey ? (blocks[rail.headerKey] ?? null) : null;
   const footer = rail.footerKey ? (blocks[rail.footerKey] ?? null) : null;
-  const [inViewRef, inView] = useInView<HTMLElement>();
   const [widthRef, available] = useElementWidth<HTMLDivElement>();
+  // Watched only once the row is drawn at its real height (its width known): see `useInView`.
+  const [inViewRef, inView] = useInView<HTMLElement>({ enabled: available > 0 });
   const rowRef = useRef<HTMLDivElement>(null);
   const url = rail.source.contentUrl ?? '';
   const hasTitles = (rail.source.count ?? 0) > 0;
@@ -269,6 +273,9 @@ export function Rail({
     items = items.slice(0, cols * rail.grid.maxRows);
   }
   const scrolls = layout === 'carousel' && !vertical;
+  // On the page's first row, the cards on screen when it opens (the ones across the lane, or the top two
+  // of a column) load their pictures at once; the rest of the row stays lazy, loaded as it is scrolled to.
+  const onScreen = !eager ? 0 : vertical ? 2 : Math.max(1, Math.ceil((lane - start) / Math.max(1, w + gap)));
   // TV: free room around the cards for the focus look (a focused card grows and glows).
   const inset = rl.focusInset;
   const t = rail.titleStyle;
@@ -322,7 +329,11 @@ export function Rail({
             >
               <AtomView
                 atom={
-                  a.action === 'see_all' ? (arrowOnlyLink ? arrowOnly(a) : withLabel(a, rail.seeAll.label)) : a
+                  a.action === 'see_all'
+                    ? arrowOnlyLink
+                      ? arrowOnly(a)
+                      : withLabel(a, rail.seeAll.label)
+                    : a
                 }
                 ctx={stripCtx}
                 inFrame={false}
@@ -429,6 +440,7 @@ export function Rail({
                   width={w}
                   height={h}
                   rank={i + 1}
+                  priority={i < onScreen ? 'eager' : 'lazy'}
                   onOpen={tappable ? (it) => onOpen(it, rail) : undefined}
                   onAction={onAction}
                 />
