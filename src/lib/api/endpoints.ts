@@ -180,6 +180,7 @@ export async function getTabPage(
   url: string,
   opts: { start?: number; storefrontId?: string } = {},
 ): Promise<Page> {
+  await progressSaved();
   const { data } = await http.get<Envelope<Page>>(path(url), { params: opts });
   const page = data.data[0];
   if (!page) throw new Error('Page not found');
@@ -193,6 +194,7 @@ export async function getPage(
   ctx: DeliveryContext,
   opts: { contentId?: string; start?: number } = {},
 ): Promise<Page> {
+  await progressSaved();
   const { data } = await http.get<Envelope<Page>>(path(fill(launch.pageURL, { slug })), {
     params: { ...ctx, ...opts },
   });
@@ -220,6 +222,8 @@ export async function getDetailPage(
     const slug = type ? DETAIL_PAGES[type] : undefined;
     return slug ? getPage(launch, slug, ctx, { contentId, ...opts }) : null;
   }
+  // A detail page carries where Play resumes: read after the last position was kept.
+  await progressSaved();
   const { data } = await http.get<Envelope<Page>>(path(fill(launch.detailURL, { content_id: contentId })), {
     params: { ...ctx, ...opts },
   });
@@ -304,12 +308,15 @@ export async function getPlayerConfig(launch: Launch, dt: string): Promise<Playe
 
 /** Call 4: a rail's titles. `contentUrl` is the rail's own `source.contentUrl`, called as sent. */
 export async function getRailItems(contentUrl: string): Promise<Title[]> {
+  await progressSaved();
   const { data } = await http.get<Envelope<Title>>(path(contentUrl));
   return data.data;
 }
 
 /** One title with what the player offers for it (qualities, audio languages, subtitles, intro). */
 export async function getTitle(id: string, ctx: DeliveryContext): Promise<Title | null> {
+  // Its `resumeSeconds` must count a report still on its way (the same title played again at once).
+  await progressSaved();
   const { data } = await http.get<Envelope<Title>>(`/v1/content/${encodeURIComponent(id)}`, { params: ctx });
   return data.data[0] ?? null;
 }
@@ -328,13 +335,39 @@ export async function putProgress(
   const duration =
     durationSeconds && Number.isFinite(durationSeconds) ? Math.floor(durationSeconds) : undefined;
   // Whether it was kept (a failed report is dropped: the next one, 10 s later, carries the same).
-  return http
+  const call = http
     .put(path(fill(progressUrl, { content_id: id })), {
       positionSeconds: position,
       ...(duration && duration > 0 ? { durationSeconds: duration } : {}),
     })
     .then(() => true)
     .catch(() => false);
+  savesInFlight.add(call);
+  void call.finally(() => savesInFlight.delete(call));
+  return call;
+}
+
+/** Progress reports sent and not answered yet (the player's last one is sent as it closes). */
+const savesInFlight = new Set<Promise<boolean>>();
+/** The longest a screen waits for them: a slow or lost report must not hold the screen back. */
+const SAVE_WAIT_MS = 2000;
+
+/**
+ * Wait for the progress reports still on their way (at most `SAVE_WAIT_MS`), so what is asked next
+ * already counts them: back from the player, Home's page (Continue Watching's `count`) and the rail's
+ * titles are read after the last position was kept, not at the same moment (the old list). Nothing in
+ * flight: no wait at all.
+ */
+async function progressSaved(): Promise<void> {
+  if (savesInFlight.size === 0) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.all([...savesInFlight]),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, SAVE_WAIT_MS);
+    }),
+  ]);
+  clearTimeout(timer);
 }
 
 /**

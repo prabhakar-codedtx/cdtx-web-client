@@ -226,17 +226,23 @@ export function Rail({
   // already there stay on screen until the new ones come. Any other rail is asked once, when near.
   const viewer = isViewerRail(rail);
   const refreshed = useRef(false);
+  // No titles held: never asked, or gone since. Whenever that happens while the rail is shown, it asks
+  // again (a safety net: a shown rail is never left with no titles and no call on its way).
+  const missing = !entry;
   useEffect(() => {
     if (!url || !hasTitles) return;
-    if (viewer && entry && !refreshed.current) {
+    if (viewer && !refreshed.current) {
+      // Once per showing: the titles kept from before are asked for again (the first load counts).
       refreshed.current = true;
-      void dispatch(refreshItems(url));
-      return;
+      if (entry) {
+        void dispatch(refreshItems(url));
+        return;
+      }
     }
-    if (inView) void dispatch(loadItems(url));
-    // `entry` only decides whether there is something to refresh; a change to it must not ask again.
+    if (inView && missing) void dispatch(loadItems(url));
+    // `entry` only decides whether there is something to refresh; `missing` asks again when it goes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inView, url, hasTitles, viewer, dispatch]);
+  }, [inView, url, hasTitles, viewer, missing, dispatch]);
 
   // Nothing to show (`count` 0, no design), or titles that came back empty or failed: no room taken.
   if (!hasTitles || !block) return null;
