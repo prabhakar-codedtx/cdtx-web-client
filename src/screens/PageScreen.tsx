@@ -7,7 +7,7 @@ import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { useInView } from '@/lib/device/useInView';
 import { fillCss, paddingCss } from '@/lib/render/paint';
 import { HeroBanner } from '@/screens/HeroBanner';
-import { navTopRoom } from '@/screens/navMetrics';
+import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
 import { Rail } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
 
@@ -22,7 +22,8 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
   const { open, act, seeAll } = useTitleActions();
   const launch = useAppSelector((s) => s.launch.launch);
   const tabs = useAppSelector((s) => s.launch.tabs);
-  const topRoom = navTopRoom(useAppSelector((s) => s.launch.navStyle));
+  const navStyle = useAppSelector((s) => s.launch.navStyle);
+  const topRoom = navTopRoom(navStyle);
   // The windows of rows asked for after the first: their rails and their card designs.
   const [more, setMore] = useState<Page[]>([]);
   const [endRef, nearEnd] = useInView<HTMLDivElement>();
@@ -56,6 +57,9 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
 
   // Inside the details dialog the page is as tall as its content, not the window.
   const inDialog = useContext(DialogRoomContext) !== null;
+  // A sidebar stacked on the screen: the rails start after its closed width; the hero's artwork and
+  // the page's background run under it. The details dialog is drawn over the sidebar: no room there.
+  const leftInset = inDialog ? 0 : navLeftInset(navStyle);
   const blocks: Record<string, Block> = Object.assign({}, page.blocks, ...more.map((p) => p.blocks));
   const rails = [...page.rails, ...more.flatMap((p) => p.rails)].filter(
     (r) => r.visible !== false && r.source.count !== 0,
@@ -80,6 +84,7 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
         ...fillCss(page.background),
         paddingTop: rails[0]?.layout === 'hero' ? 0 : topRoom,
         paddingBottom: sp.pageBottom ?? 0,
+        paddingLeft: leftInset,
         // The page's background fills the whole window, however few rails or titles there are: a short page
         // (a small library, an empty one) must not end halfway down with the browser's white below it.
         minHeight: inDialog ? undefined : '100vh',
@@ -97,14 +102,17 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
       <div style={{ display: 'flex', flexDirection: 'column', gap: sp.railGap ?? 0 }}>
         {rails.map((rail) =>
           rail.layout === 'hero' ? (
-            <HeroBanner
-              key={rail.key}
-              rail={rail}
-              blocks={blocks}
-              pageBackground={page.background}
-              onOpen={open}
-              onAction={act}
-            />
+            // The hero runs the full width, under the sidebar too; its banner, text and dots start at the inset.
+            <div key={rail.key} style={{ marginLeft: -leftInset }}>
+              <HeroBanner
+                rail={rail}
+                blocks={blocks}
+                pageBackground={page.background}
+                leftInset={leftInset}
+                onOpen={open}
+                onAction={act}
+              />
+            </div>
           ) : (
             <div key={rail.key} style={paddingCss(sp.railPadding)}>
               <Rail

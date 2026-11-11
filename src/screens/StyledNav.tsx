@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { path } from '@/lib/api/endpoints';
-import type { NavBarStyle, NavBarText, NavPage } from '@/lib/api/types';
+import type { NavBarStyle, NavBarText, NavFade, NavPage } from '@/lib/api/types';
+import { rgba } from '@/lib/render/paint';
+import { sidebarMetrics } from '@/screens/navMetrics';
 
 /**
  * The tab bar as the CMS designed it (Design System → Navigation; `GET {tabsURL}` → `style`, for
@@ -36,7 +38,12 @@ export function StyledNav({
   const side = style.placement === 'left';
   const bottom = style.placement === 'bottom';
   const dropdown = style.placement === 'dropdown';
-  const collapsed = side && style.collapsed;
+  const sb = sidebarMetrics(style);
+  // A sidebar that opens on focus is closed (icons only) until the pointer or focus is in it.
+  const [expanded, setExpanded] = useState(false);
+  const isOpen = sb ? (sb.expandable ? expanded : !style.collapsed) : false;
+  const collapsed = side && !isOpen;
+  const sideWidth = sb ? (isOpen ? sb.openWidth : sb.closedWidth) : 0;
   const [imageFailed, setImageFailed] = useState(false);
   // Open for one address only: going to another page closes it without an effect.
   const [openAt, setOpenAt] = useState<string | null>(null);
@@ -45,16 +52,21 @@ export function StyledNav({
     setOpenAt((cur) => ((typeof value === 'function' ? value(cur === pathname) : value) ? pathname : null));
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // A sidebar or a bottom bar takes room from the page; a top bar floats over it (as before).
+  // A sidebar beside the page or a bottom bar takes room from the page; a top bar floats over it (as
+  // before). A sidebar stacked on the storefront takes none: the screens leave `contentInset` for it.
+  const besideRoom = side && sb && !sb.overlay ? sideWidth : 0;
+  const animMs = sb?.animationMs ?? 0;
   useEffect(() => {
     const body = document.body.style;
-    body.paddingLeft = side ? `${collapsed ? 96 : style.size}px` : '';
+    body.paddingLeft = besideRoom ? `${besideRoom}px` : '';
     body.paddingBottom = bottom ? `${style.size}px` : '';
+    body.transition = besideRoom ? `padding-left ${animMs}ms ease` : '';
     return () => {
       body.paddingLeft = '';
       body.paddingBottom = '';
+      body.transition = '';
     };
-  }, [side, bottom, collapsed, style.size]);
+  }, [besideRoom, bottom, style.size, animMs]);
 
   // The dropdown's list closes on Escape and a click outside.
   useEffect(() => {
@@ -96,18 +108,28 @@ export function StyledNav({
       typeof style.padding === 'number'
         ? style.padding
         : `${style.padding.top}px ${style.padding.right}px ${style.padding.bottom}px ${style.padding.left}px`,
-    background: style.background.gradient ?? style.background.color ?? 'transparent',
+    // A sidebar stacked on the storefront has no panel: its colour is the shade drawn under it.
+    background: sb?.overlay
+      ? 'transparent'
+      : (style.background.gradient ?? style.background.color ?? 'transparent'),
     ...(side
-      ? { top: 0, bottom: 0, left: 0, width: collapsed ? 96 : style.size, overflowY: 'auto' }
+      ? {
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: sideWidth,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          transition: `width ${animMs}ms ease`,
+        }
       : bottom
         ? { left: 0, right: 0, bottom: 0, height: style.size }
         : { top: 0, left: 0, right: 0, height: style.size, overflowX: dropdown ? 'visible' : 'auto' }),
-    ...(style.divider
-      ? side
-        ? { borderRight: '1px solid rgba(255,255,255,0.12)' }
-        : bottom
-          ? { borderTop: '1px solid rgba(255,255,255,0.12)' }
-          : { borderBottom: '1px solid rgba(255,255,255,0.12)' }
+    ...(style.divider && !sb?.overlay
+      ? {
+          [side ? 'borderRight' : bottom ? 'borderTop' : 'borderBottom']:
+            `${style.dividerWidth ?? 1}px solid ${style.dividerColor ?? 'rgba(255,255,255,0.12)'}`,
+        }
       : {}),
   };
 
@@ -209,23 +231,91 @@ export function StyledNav({
     );
   }
 
+  // A sidebar that opens on focus: open while the pointer is over it or focus is inside it.
+  const opener = sb?.expandable
+    ? {
+        onMouseEnter: () => setExpanded(true),
+        onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+          if (!e.currentTarget.contains(document.activeElement)) setExpanded(false);
+        },
+        onFocus: () => setExpanded(true),
+        onBlur: (e: React.FocusEvent<HTMLElement>) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setExpanded(false);
+        },
+      }
+    : {};
+  // `selectOn: focus`: a tab that keeps focus `selectDelayMs` opens its screen, without a select.
+  const selectAfterMs = side && style.selectOn === 'focus' ? (style.selectDelayMs ?? 400) : undefined;
+
   return (
-    <nav aria-label="Tabs" style={bar}>
-      {back}
-      {brand}
-      {tabs.map((t) => (
-        <TabLink
-          key={t.slug}
-          tab={t}
-          to={to(t)}
-          style={style}
-          active={isCurrent(t)}
-          icon={icon}
-          grow={style.align === 'spread' && !side}
-          iconOnly={collapsed}
+    <>
+      {side && sb?.overlay && style.fade && <SidebarShade fade={style.fade} open={isOpen} ms={animMs} />}
+      <nav aria-label="Tabs" style={bar} {...opener}>
+        {back}
+        {brand}
+        {tabs.map((t) => (
+          <TabLink
+            key={t.slug}
+            tab={t}
+            to={to(t)}
+            style={style}
+            active={isCurrent(t)}
+            icon={icon}
+            grow={style.align === 'spread' && !side}
+            iconOnly={collapsed}
+            selectAfterMs={isCurrent(t) ? undefined : selectAfterMs}
+          />
+        ))}
+      </nav>
+    </>
+  );
+}
+
+/**
+ * A stacked sidebar's shade, in its colour from the screen's left edge: light behind the icons while it
+ * is closed (`closed`, stops in px, so the hero shows through), deeper behind the names while it is open
+ * (`open`, stops as a share of the screen's width). One fades into the other as the sidebar opens.
+ */
+function SidebarShade({ fade, open, ms }: { fade: NavFade; open: boolean; ms: number }) {
+  const at = (opacity: number) => rgba(fade.color, opacity) ?? 'transparent';
+  const openStops = fade.open.map((s) => `${at(s.opacity)} ${s.atScreen * 100}%`).join(', ');
+  const closedStops = fade.closed.map((s) => `${at(s.opacity)} ${s.atPx}px`).join(', ');
+  const closedWidth = Math.max(...fade.closed.map((s) => s.atPx), 1);
+  const layer: CSSProperties = {
+    position: 'fixed',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    // Under the bar (5), over the screen; never in the way of a tap.
+    zIndex: 4,
+    pointerEvents: 'none',
+    transition: `opacity ${ms}ms ease`,
+  };
+  return (
+    <>
+      {fade.closed.length > 1 && (
+        <div
+          aria-hidden
+          style={{
+            ...layer,
+            width: closedWidth,
+            opacity: open ? 0 : 1,
+            background: `linear-gradient(to right, ${closedStops})`,
+          }}
         />
-      ))}
-    </nav>
+      )}
+      {fade.open.length > 1 && (
+        <div
+          aria-hidden
+          style={{
+            ...layer,
+            width: '100vw',
+            opacity: open ? 1 : 0,
+            background: `linear-gradient(to right, ${openStops})`,
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -246,6 +336,8 @@ function itemStyle(style: NavBarStyle, active: boolean, side: boolean): CSSPrope
   const t = style.indicator.thickness;
   const mark = style.indicator.color ?? ink;
   const marker: CSSProperties = {};
+  // The tab's corners as the CMS sets them (`itemRadius`); 10 from an older server.
+  const r = style.itemRadius ?? 10;
   if (active) {
     if (style.indicator.type === 'underline') marker.boxShadow = `inset 0 -${t}px 0 ${mark}`;
     if (style.indicator.type === 'sidebar') marker.boxShadow = `inset ${t}px 0 0 ${mark}`;
@@ -253,10 +345,10 @@ function itemStyle(style: NavBarStyle, active: boolean, side: boolean): CSSPrope
     if (style.indicator.type === 'background')
       Object.assign(marker, {
         background: style.activeBackground ?? 'rgba(255,255,255,0.12)',
-        borderRadius: 10,
+        borderRadius: r,
       });
     if (style.activeBackground && style.indicator.type !== 'background' && style.indicator.type !== 'pill')
-      Object.assign(marker, { background: style.activeBackground, borderRadius: 10 });
+      Object.assign(marker, { background: style.activeBackground, borderRadius: r });
   }
   return {
     display: 'flex',
@@ -284,6 +376,7 @@ function TabLink({
   grow,
   iconOnly,
   role,
+  selectAfterMs,
 }: {
   tab: NavPage;
   to: string;
@@ -293,7 +386,12 @@ function TabLink({
   grow?: boolean;
   iconOnly?: boolean;
   role?: string;
+  /** Open this tab once focus has rested on it this long (`selectOn: focus`), ms. */
+  selectAfterMs?: number;
 }) {
+  const navigate = useNavigate();
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
   const layout = iconOnly ? 'icon' : style.itemLayout;
   const src = layout !== 'text' ? icon(tab.icon, active ? style.activeColor : style.itemColor) : null;
   const size = style.iconSize ?? 20;
@@ -302,6 +400,15 @@ function TabLink({
       to={to}
       end
       role={role}
+      onFocus={
+        selectAfterMs === undefined
+          ? undefined
+          : () => {
+              window.clearTimeout(timer.current);
+              timer.current = window.setTimeout(() => navigate(to), selectAfterMs);
+            }
+      }
+      onBlur={selectAfterMs === undefined ? undefined : () => window.clearTimeout(timer.current)}
       aria-label={iconOnly ? (tab.title ?? tab.slug) : undefined}
       style={{
         // A sidebar and the dropdown's list are lists: each row starts at the left, so the icons

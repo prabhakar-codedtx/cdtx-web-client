@@ -19,6 +19,7 @@ export function HeroBanner({
   rail,
   blocks,
   pageBackground,
+  leftInset = 0,
   onOpen,
   onAction,
 }: {
@@ -26,6 +27,8 @@ export function HeroBanner({
   blocks: Record<string, Block>;
   /** The page's background: the backdrop fades into its colour, so no edge shows where the hero ends. */
   pageBackground?: Fill | null;
+  /** Room at the left for a sidebar stacked on the screen, px: the backdrop runs under it; the banner, its arrows and dots start after it. */
+  leftInset?: number;
   onOpen: (title: Title, rail: Rail) => void;
   onAction: (action: string, title: Title | null) => void;
 }) {
@@ -96,9 +99,11 @@ export function HeroBanner({
   if (entry && (entry.status === 'failed' || (entry.status === 'ready' && count === 0))) return null;
 
   const card = block.card;
+  // The room the banner has: the hero's width less a stacked sidebar's.
+  const room = Math.max(0, width - leftInset);
   // Leave room for the margins; never narrower than a third of the screen.
-  const side = Math.min(inset, Math.max(0, width / 3));
-  const bannerWidth = width - 2 * side;
+  const side = Math.min(inset, Math.max(0, room / 3));
+  const bannerWidth = room - 2 * side;
   const ratio = card.width && card.height ? card.width / card.height : 16 / 9;
   // `stretch.height: screen` is the window's height; otherwise the card keeps its own shape. A banner set in
   // from the screen (a space at its sides or above it) sits inside the window, so it keeps its own shape too.
@@ -124,7 +129,7 @@ export function HeroBanner({
     transform: 'translateY(-50%)',
     opacity: over ? 1 : 0,
     transition: 'opacity 0.2s ease',
-    [dir < 0 ? 'left' : 'right']: outside ? Math.max(0, (side - 36) / 2) : 8,
+    [dir < 0 ? 'left' : 'right']: (dir < 0 ? leftInset : 0) + (outside ? Math.max(0, (side - 36) / 2) : 8),
     zIndex: 2,
     width: 36,
     height: 36,
@@ -183,7 +188,7 @@ export function HeroBanner({
       {width > 0 && (
         <div
           key={item?.id ?? 'empty'}
-          style={{ position: 'relative', marginLeft: side, width: bannerWidth, borderRadius: radius, overflow: 'hidden' }}
+          style={{ position: 'relative', marginLeft: leftInset + side, width: bannerWidth, borderRadius: radius, overflow: 'hidden' }}
         >
           <CardView
             block={block}
@@ -207,7 +212,7 @@ export function HeroBanner({
         </>
       )}
       {thumbs && count > 1 && (
-        <div style={{ display: 'flex', overflowX: 'auto' }}>
+        <div style={{ display: 'flex', overflowX: 'auto', paddingLeft: leftInset }}>
           {items.slice(0, Math.max(thumbs.thumbnailsShown ?? 0, 0) || count).map((it, i) => {
             const src = imageFor(it, card.imageAspect);
             return (
@@ -241,7 +246,7 @@ export function HeroBanner({
         <div
           style={{
             position: 'absolute',
-            left: side,
+            left: leftInset + side,
             right: side,
             bottom: dot.bottom,
             zIndex: 2,

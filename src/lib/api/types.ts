@@ -106,10 +106,43 @@ export interface NavBarStyle {
   gap: number;
   /** Around the bar's edge, px: each side (one number from an older server). */
   padding: number | { top: number; right: number; bottom: number; left: number };
-  /** The bar's height; a sidebar's width (px). */
+  /** The bar's height; a sidebar's width (px), open. */
   size: number;
   logo: boolean;
+  /** A sidebar that shows icons only, `collapsedSize` wide, always. */
   collapsed: boolean;
+  // ---- a sidebar (`placement: left`); absent on an older server ----
+  /**
+   * `overlay`: the sidebar is stacked on the storefront. It has no panel, only a see-through shade of
+   * its colour (`fade`); the hero's artwork runs under it and everything else starts at
+   * `contentInset`; opening, it goes over the storefront, which never moves. `beside`: it takes its
+   * room from the page, which starts after it.
+   */
+  sidebarLayer?: 'overlay' | 'beside';
+  /** Where the storefront's content starts from the left edge, px (0 when nothing is stacked). */
+  contentInset?: number;
+  /** Icons only, `collapsedSize` wide, until the pointer or focus moves into it; then `size` wide, with names. */
+  expandOnFocus?: boolean;
+  /** The sidebar's width while it shows icons only, px. */
+  collapsedSize?: number;
+  /** When the screen changes to a tab: on select (`ok`), or once focus has rested on it `selectDelayMs`. */
+  selectOn?: 'ok' | 'focus';
+  selectDelayMs?: number;
+  /** How long opening and closing takes, ms. */
+  animationMs?: number;
+  /** A stacked sidebar's shade: its colour, its stops open (a share of the screen's width) and closed (px). */
+  fade?: NavFade | null;
+  /** A tab's corners, px. */
+  itemRadius?: number;
+  dividerColor?: string | null;
+  dividerWidth?: number;
+}
+
+/** A stacked sidebar's shade, drawn from the screen's left edge in the sidebar's colour. */
+export interface NavFade {
+  color: string;
+  open: { atScreen: number; opacity: number }[];
+  closed: { atPx: number; opacity: number }[];
 }
 
 export interface NavBarText {
