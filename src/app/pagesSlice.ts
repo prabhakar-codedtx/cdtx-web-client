@@ -171,18 +171,13 @@ const slice = createSlice({
       }
     },
     /**
-     * The viewer's progress was saved: Continue Watching's titles are dropped, so they are asked for
-     * again when shown, and the pages are asked for again (a rail's count may have changed, e.g.
-     * 0 -> 1). Every other rail keeps its titles.
+     * The viewer's progress was saved: a screen on show asks for its page again (a rail's count may
+     * have changed, e.g. 0 -> 1). Continue Watching's titles are not dropped: the rail asks for them
+     * again each time it is shown, after the save (`progressSaved` in `endpoints.ts`), and keeps the
+     * ones it has on screen until the new ones come (dropping them left the row empty).
      */
     viewerChanged(s) {
       s.viewerVersion += 1;
-      for (const entry of Object.values(s.pages)) {
-        for (const rail of entry.data?.rails ?? []) {
-          const url = rail.source?.contentUrl;
-          if (url && rail.source.type === 'continue_watching') delete s.items[url];
-        }
-      }
     },
   },
   extraReducers: (b) => {
