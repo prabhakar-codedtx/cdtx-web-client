@@ -7,7 +7,7 @@ import { fillCss, textCss } from '@/lib/render/paint';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { CardView } from '@/render/CardView';
-import { navTopRoom } from '@/screens/navMetrics';
+import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
 import { cardSize } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
 
@@ -42,7 +42,10 @@ export function SeeAllScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const launch = useAppSelector((s) => s.launch.launch);
-  const topRoom = navTopRoom(useAppSelector((s) => s.launch.navStyle));
+  const navStyle = useAppSelector((s) => s.launch.navStyle);
+  const topRoom = navTopRoom(navStyle);
+  // A sidebar stacked on the screen: the list starts after its closed width (the background runs under it).
+  const leftInset = navLeftInset(navStyle);
   const { open, act } = useTitleActions();
   const sent = location.state as {
     rail?: Rail;
@@ -149,7 +152,15 @@ export function SeeAllScreen() {
 
   if (failed) {
     return (
-      <main ref={widthRef} style={{ ...frame, padding: d.sidePadding, paddingTop: topRoom + d.sidePadding }}>
+      <main
+        ref={widthRef}
+        style={{
+          ...frame,
+          padding: d.sidePadding,
+          paddingTop: topRoom + d.sidePadding,
+          paddingLeft: leftInset + d.sidePadding,
+        }}
+      >
         <div role="alert">
           <strong>This list isn&apos;t available.</strong>{' '}
           <Link to="/" style={{ color: ink }}>
@@ -161,7 +172,15 @@ export function SeeAllScreen() {
   }
   if (!rail)
     return (
-      <main ref={widthRef} style={{ ...frame, padding: d.sidePadding, paddingTop: topRoom + d.sidePadding }}>
+      <main
+        ref={widthRef}
+        style={{
+          ...frame,
+          padding: d.sidePadding,
+          paddingTop: topRoom + d.sidePadding,
+          paddingLeft: leftInset + d.sidePadding,
+        }}
+      >
         Loading…
       </main>
     );
@@ -170,12 +189,13 @@ export function SeeAllScreen() {
   const gap = rl.gap ?? 12;
   const side = d.sidePadding;
   const back = d.backButton;
-  const lane = Math.max(0, available - 2 * side);
+  // `available` is the screen's whole width, the sidebar's room included.
+  const lane = Math.max(0, available - leftInset - 2 * side);
   const size = block ? cardSize(rl, block, 'grid', lane, items.length) : { w: 0, h: 0 };
   const name = rail.title || rail.seeAll.label || 'All titles';
 
   return (
-    <main ref={widthRef} style={{ ...frame, paddingTop: topRoom }}>
+    <main ref={widthRef} style={{ ...frame, paddingTop: topRoom, paddingLeft: leftInset }}>
       <div style={{ padding: `${d.topPadding}px ${side}px ${d.bottomPadding}px` }}>
         <div
           style={{
