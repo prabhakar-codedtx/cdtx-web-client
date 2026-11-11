@@ -102,7 +102,8 @@ export function StyledNav({
     display: 'flex',
     flexDirection: side ? 'column' : 'row',
     alignItems: side ? 'stretch' : 'center',
-    justifyContent: style.align === 'center' && !side ? 'center' : 'flex-start',
+    // The back button and the logo stay at the start; `align` places only the tabs (as the CMS draws it).
+    justifyContent: 'flex-start',
     gap: style.gap,
     padding:
       typeof style.padding === 'number'
@@ -253,19 +254,36 @@ export function StyledNav({
       <nav aria-label="Tabs" style={bar} {...opener}>
         {back}
         {brand}
-        {tabs.map((t) => (
-          <TabLink
-            key={t.slug}
-            tab={t}
-            to={to(t)}
-            style={style}
-            active={isCurrent(t)}
-            icon={icon}
-            grow={style.align === 'spread' && !side}
-            iconOnly={collapsed}
-            selectAfterMs={isCurrent(t) ? undefined : selectAfterMs}
-          />
-        ))}
+        {/* The tabs fill the room after the logo; `align` places them in it, as the CMS preview does:
+            `center` in the middle (a sidebar's down its height, a bar's across its width), `spread`
+            sharing it out, `start` at the top or left. */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: side ? 'column' : 'row',
+            alignItems: side ? 'stretch' : 'center',
+            justifyContent: style.align === 'center' ? 'center' : 'flex-start',
+            gap: style.gap,
+            flex: '1 1 0',
+            minWidth: 0,
+            minHeight: 0,
+            alignSelf: 'stretch',
+          }}
+        >
+          {tabs.map((t) => (
+            <TabLink
+              key={t.slug}
+              tab={t}
+              to={to(t)}
+              style={style}
+              active={isCurrent(t)}
+              icon={icon}
+              grow={style.align === 'spread'}
+              iconOnly={collapsed}
+              selectAfterMs={isCurrent(t) ? undefined : selectAfterMs}
+            />
+          ))}
+        </div>
       </nav>
     </>
   );
