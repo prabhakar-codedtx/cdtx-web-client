@@ -1,13 +1,15 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { useAppSelector } from '@/app/hooks';
 import { DETAIL_SCREEN, getDetailPage, getPage, getTabPage } from '@/lib/api/endpoints';
 import type { Block, Page } from '@/lib/api/types';
 import { DialogRoomContext } from '@/lib/device/dialogContext';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { useInView } from '@/lib/device/useInView';
+import { loadingDebug, logLoading } from '@/lib/debug/loadingLog';
 import { fillCss, paddingCss } from '@/lib/render/paint';
 import { HeroBanner } from '@/screens/HeroBanner';
 import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
+import { LoadingInspector } from '@/screens/LoadingInspector';
 import { Rail } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
 
@@ -41,6 +43,7 @@ export function PageScreen({
   // `railsFirst` and grows by `railsNext` as the viewer reaches the rows near the end of what is let in.
   const loading = page.loading;
   const [letIn, setLetIn] = useState(() => loading?.railsFirst ?? Infinity);
+  const loggedUpTo = useRef(0);
   // Whether the end of the rows is near now (not "has ever been"): once a window of rows has come and
   // pushed the end down out of reach, the next window waits until the viewer scrolls near it again.
   const [endRef, nearEnd] = useInView<HTMLDivElement>({ once: false });
@@ -90,16 +93,34 @@ export function PageScreen({
   const rowIndex = new Map(rails.filter((r) => r.layout !== 'hero').map((r, i) => [r.key, i]));
   // The viewer reached row `i`: if it is within `railsNextWithin` rows of the last row let in, the next
   // `railsNext` rows are let in (more batches at once when the viewer jumped far down).
+  const rowList = rails.filter((r) => r.layout !== 'hero');
   const reached = (i: number) => {
     if (!loading) return;
     const next = Math.max(1, loading.railsNext ?? 5);
     const within = Math.max(0, loading.railsNextWithin ?? 2);
-    setLetIn((n) => {
-      let out = n;
-      while (i >= out - 1 - within) out += next;
-      return out;
-    });
+    let out = letIn;
+    while (i >= out - 1 - within) out += next;
+    if (out === letIn) return;
+    // Why the next batch: for the loading inspector (`?loading=debug`) and the console. Logged once per
+    // batch (two rows reaching the screen together would otherwise both report it).
+    if (letIn < rowList.length && out > loggedUpTo.current) {
+      loggedUpTo.current = out;
+      logLoading(
+        `Reached row ${i + 1} "${rowList[i]?.title ?? ''}" (within ${within} of row ${letIn}, the last let in) → rows ${letIn + 1}–${Math.min(out, rowList.length)} let in`,
+      );
+    }
+    setLetIn((n) => Math.max(n, out));
   };
+  // The page opened: what Page → Loading lets in first.
+  useEffect(() => {
+    if (!loading) return;
+    const rows = rails.filter((r) => r.layout !== 'hero').length;
+    logLoading(
+      `Page opened (${dt}): hero + rows 1–${Math.min(loading.railsFirst ?? rows, rows)} of ${rows} let in (railsFirst ${loading.railsFirst})`,
+    );
+    // Once per page: the page component is keyed by its slug and device.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // A rail whose titles came back none (a library emptied since the page was asked for: the
   // page's `count` still says 1, the list fetched again after the last Remove says 0) draws nothing.
   const items = useAppSelector((s) => s.pages.items);
@@ -174,6 +195,19 @@ export function PageScreen({
         )}
       </div>
       {nextStart !== null && <div ref={endRef} aria-hidden style={{ height: 1 }} />}
+      {loadingDebug && loading && (
+        <LoadingInspector
+          loading={loading}
+          dt={dt}
+          letIn={letIn}
+          rows={rails.map((r) => ({
+            key: r.key,
+            title: r.title ?? r.key,
+            url: r.source.contentUrl ?? '',
+            index: r.layout === 'hero' ? -1 : (rowIndex.get(r.key) ?? 0),
+          }))}
+        />
+      )}
     </main>
   );
 }
