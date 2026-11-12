@@ -37,6 +37,10 @@ export function PageScreen({
   const topRoom = navTopRoom(navStyle);
   // The windows of rows asked for after the first: their rails and their card designs.
   const [more, setMore] = useState<Page[]>([]);
+  // Page → Loading: how many rows (the hero not counted) may ask for their titles so far. It starts at
+  // `railsFirst` and grows by `railsNext` as the viewer reaches the rows near the end of what is let in.
+  const loading = page.loading;
+  const [letIn, setLetIn] = useState(() => loading?.railsFirst ?? Infinity);
   // Whether the end of the rows is near now (not "has ever been"): once a window of rows has come and
   // pushed the end down out of reach, the next window waits until the viewer scrolls near it again.
   const [endRef, nearEnd] = useInView<HTMLDivElement>({ once: false });
@@ -82,6 +86,20 @@ export function PageScreen({
   // The first row of cards is on screen (or just under the hero) when the page opens: its pictures load
   // at once instead of waiting to be seen. Every other row's load as they near the screen.
   const firstRow = rails.find((r) => r.layout !== 'hero')?.key;
+  // Each row's place among the rows (the hero is not a row), for the batches of Page → Loading.
+  const rowIndex = new Map(rails.filter((r) => r.layout !== 'hero').map((r, i) => [r.key, i]));
+  // The viewer reached row `i`: if it is within `railsNextWithin` rows of the last row let in, the next
+  // `railsNext` rows are let in (more batches at once when the viewer jumped far down).
+  const reached = (i: number) => {
+    if (!loading) return;
+    const next = Math.max(1, loading.railsNext ?? 5);
+    const within = Math.max(0, loading.railsNextWithin ?? 2);
+    setLetIn((n) => {
+      let out = n;
+      while (i >= out - 1 - within) out += next;
+      return out;
+    });
+  };
   // A rail whose titles came back none (a library emptied since the page was asked for: the
   // page's `count` still says 1, the list fetched again after the last Remove says 0) draws nothing.
   const items = useAppSelector((s) => s.pages.items);
@@ -136,6 +154,9 @@ export function PageScreen({
                 rail={rail}
                 blocks={blocks}
                 eager={rail.key === firstRow}
+                loading={loading}
+                canLoad={loading ? (rowIndex.get(rail.key) ?? 0) < letIn : undefined}
+                onSeen={() => reached(rowIndex.get(rail.key) ?? 0)}
                 onOpen={open}
                 onAction={act}
                 onSeeAll={(r) =>

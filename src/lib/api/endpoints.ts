@@ -308,9 +308,23 @@ export async function getPlayerConfig(launch: Launch, dt: string): Promise<Playe
 
 /** Call 4: a rail's titles. `contentUrl` is the rail's own `source.contentUrl`, called as sent. */
 export async function getRailItems(contentUrl: string): Promise<Title[]> {
+  return (await getRailWindow(contentUrl)).items;
+}
+
+/** One window of a rail's titles, and how many the rail holds (`header.count`; null: an older server). */
+export async function getRailWindow(contentUrl: string): Promise<{ items: Title[]; count: number | null }> {
   await progressSaved();
   const { data } = await http.get<Envelope<Title>>(path(contentUrl));
-  return data.data;
+  return { items: data.data, count: typeof data.header?.count === 'number' ? data.header.count : null };
+}
+
+/** A rail's `contentUrl` asking for `limit` titles from `offset` (the server pages by offset). */
+export function railWindowUrl(contentUrl: string, offset: number, limit: number): string {
+  const absolute = /^https?:\/\//i.test(contentUrl);
+  const u = new URL(contentUrl, 'http://api.invalid');
+  u.searchParams.set('limit', String(limit));
+  u.searchParams.set('offset', String(offset));
+  return absolute ? u.toString() : `${u.pathname}${u.search}`;
 }
 
 /** One title with what the player offers for it (qualities, audio languages, subtitles, intro). */
