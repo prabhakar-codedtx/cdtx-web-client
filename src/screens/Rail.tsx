@@ -4,6 +4,7 @@ import { isViewerRail, loadItems, loadMoreItems, refreshItems } from '@/app/page
 import type { Atom, Block, PageLoading, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { useInView } from '@/lib/device/useInView';
+import { logLoading } from '@/lib/debug/loadingLog';
 import { CardView } from '@/render/CardView';
 import { AtomView, type PartCtx } from '@/render/Parts';
 import { fillCss, paddingCss, textCss } from '@/lib/render/paint';
@@ -264,8 +265,21 @@ export function Rail({
   const have = entry?.status === 'ready' ? (entry.data?.length ?? 0) : 0;
   const hasMore = !!paging && have > 0 && have < Math.min(paging.max, more?.total ?? Infinity);
   const askMore = useCallback(() => {
-    if (paging && url) void dispatch(loadMoreItems({ contentUrl: url, limit: paging.next, max: paging.max }));
-  }, [dispatch, url, paging?.next, paging?.max]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!paging || !url) return;
+    const from = have;
+    void dispatch(loadMoreItems({ contentUrl: url, limit: paging.next, max: paging.max })).then((a) => {
+      // Logged only when it was really asked (one window at a time, none past the end): loading inspector.
+      if (!loadMoreItems.fulfilled.match(a)) return;
+      const got = a.payload.items.length;
+      const which = got === 1 ? `card ${from + 1}` : `cards ${from + 1}–${from + got}`;
+      logLoading(
+        got
+          ? `"${rail.title ?? rail.key}": ${which} loaded sideways (offset ${from}, limit ${paging.next})`
+          : `"${rail.title ?? rail.key}": no more cards (all ${from} loaded)`,
+        'cards',
+      );
+    });
+  }, [dispatch, url, paging?.next, paging?.max, have]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Within `titlesNextWithin` cards of the row's end: ask for the next window. */
   const checkRowEnd = useCallback(() => {
     const row = rowRef.current;
@@ -307,7 +321,12 @@ export function Rail({
       }
     }
     // With Page → Loading the row asks when its batch is let in; else when it comes near the screen.
-    if ((canLoad ?? inView) && missing) void dispatch(loadItems(url));
+    if ((canLoad ?? inView) && missing) {
+      void dispatch(loadItems(url));
+      logLoading(
+        `"${rail.title ?? rail.key}": titles asked (${new URL(url, 'http://x').searchParams.get('limit') ?? '?'} cards)`,
+      );
+    }
     // `entry` only decides whether there is something to refresh; `missing` asks again when it goes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inView, canLoad, url, hasTitles, viewer, missing, dispatch]);
