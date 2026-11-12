@@ -8,7 +8,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from 'react';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import type { Atom, Block, Card, Component, Frame, LayoutItem, Rule, Title } from '@/lib/api/types';
 import { imageSrc } from '@/lib/render/fields';
 import { fitOf } from '@/lib/render/units';
@@ -24,6 +24,7 @@ import {
 } from '@/lib/render/paint';
 import { resolveLayout } from '@/lib/layout/resolve';
 import type { Attribute, Box, LayoutRule, Relation } from '@/lib/layout/types';
+import { Img, type ImgPriority } from '@/render/Img';
 import { AtomView, flexOf, isDrawn, type PartCtx } from '@/render/Parts';
 
 /**
@@ -185,6 +186,38 @@ function ComponentView({
 
 // ---- the card ------------------------------------------------------------------------------------
 
+const sweep = keyframes`
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+`;
+
+/**
+ * The look of a card still waiting for its title: a faint tint (a card with no colour of its own would
+ * be invisible) and a band of light sweeping across. Still, without the sweep, where the device asks
+ * for less motion.
+ */
+const Shimmer = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+    animation: ${sweep} 1.4s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &::after {
+      animation: none;
+      display: none;
+    }
+  }
+`;
+
 /**
  * The card's box: its width and height are the rail's, its parts are placed inside it, and its TV
  * focus look is `card.focus` (null: none).
@@ -230,8 +263,11 @@ export interface CardViewProps {
   rank?: number;
   onOpen?: (title: Title) => void;
   onAction?: (action: string, title: Title | null) => void;
-  /** Paints the card ahead of the page (a hero is drawn the moment it is on screen). */
-  priority?: boolean;
+  /**
+   * How soon the card's pictures load: `high` for the hero (drawn the moment it is on screen, ahead of
+   * everything), `eager` for a card on screen when the page opens, else `lazy` (as it nears the screen).
+   */
+  priority?: ImgPriority;
   /** A rail's header or footer: drawn with no title. */
   standalone?: boolean;
 }
@@ -259,7 +295,7 @@ export function CardView({
   const fit = fitOf({ width: W, height: H }, card);
   const resolveAgain = useRef<() => void>(() => {});
   const onResize = useCallback(() => resolveAgain.current(), []);
-  const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction, onResize };
+  const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction, onResize, priority };
   // The designed card at the size it is drawn: what a fixed or minimum box is a fraction of.
   const designed = { w: (card.width ?? W) * fit, h: (card.height ?? H) * fit };
   const rootRef = useRef<HTMLDivElement>(null);
@@ -427,11 +463,9 @@ export function CardView({
               <div style={layer('background', { backgroundColor: rgba(bg.fallbackColor) })} />
             )}
             {bgImage && (
-              <img
+              <Img
                 src={bgImage}
-                alt=""
-                draggable={false}
-                loading={priority ? 'eager' : 'lazy'}
+                priority={priority}
                 style={{ ...layer('background'), width: '100%', height: '100%', ...objectFitCss(bg.image) }}
               />
             )}
@@ -441,11 +475,9 @@ export function CardView({
           </>
         )}
         {inset && insetSrc && (
-          <img
+          <Img
             src={insetSrc}
-            alt=""
-            draggable={false}
-            loading={priority ? 'eager' : 'lazy'}
+            priority={priority}
             style={{
               position: 'absolute',
               left: (inset.left ?? 0) * fit,
@@ -464,6 +496,9 @@ export function CardView({
         {card.border && (
           <div style={layer('outline', { borderRadius: radius, ...strokeCss(card.border, fit) })} />
         )}
+        {/* A card whose title is still on its way: a faint light sweeps across it, so it reads as
+            loading, not as an empty or broken card. A rail's header or footer has no title to wait for. */}
+        {!title && !standalone && <Shimmer aria-hidden />}
         {showParts &&
           placed.map((p) => (
             <div

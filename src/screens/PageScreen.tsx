@@ -18,7 +18,18 @@ import { useTitleActions } from '@/screens/useTitleActions';
  * of title, or one with nothing to show) or with `source.count` 0 is skipped: not drawn, its titles
  * not asked for. More rows (`paging.nextStart`) are asked for when the user nears the bottom.
  */
-export function PageScreen({ page, contentId, screen }: { page: Page; contentId?: string; screen?: string }) {
+export function PageScreen({
+  page,
+  contentId,
+  screen,
+  dt,
+}: {
+  page: Page;
+  contentId?: string;
+  screen?: string;
+  /** The device the page was asked for as: its later rows are asked for as the same one. */
+  dt: string;
+}) {
   const { open, act, seeAll } = useTitleActions();
   const launch = useAppSelector((s) => s.launch.launch);
   const tabs = useAppSelector((s) => s.launch.tabs);
@@ -26,14 +37,21 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
   const topRoom = navTopRoom(navStyle);
   // The windows of rows asked for after the first: their rails and their card designs.
   const [more, setMore] = useState<Page[]>([]);
-  const [endRef, nearEnd] = useInView<HTMLDivElement>();
+  // Page → Loading: how many rows (the hero not counted) may ask for their titles so far. It starts at
+  // `railsFirst` and grows by `railsNext` as the viewer reaches the rows near the end of what is let in.
+  const loading = page.loading;
+  const [letIn, setLetIn] = useState(() => loading?.railsFirst ?? Infinity);
+  // Whether the end of the rows is near now (not "has ever been"): once a window of rows has come and
+  // pushed the end down out of reach, the next window waits until the viewer scrolls near it again.
+  const [endRef, nearEnd] = useInView<HTMLDivElement>({ once: false });
   const last = more[more.length - 1] ?? page;
   const nextStart = last.paging.nextStart;
 
   useEffect(() => {
     if (!nearEnd || nextStart === null || !launch || !page.slug) return;
     let live = true;
-    const ctx = getDeliveryContext();
+    // As the device the page was opened as, whatever the window's width is now: one page, one device.
+    const ctx = { ...getDeliveryContext(), dt };
     // A detail screen asks its next rows the way it was opened (`detailURL`), so the same page answers.
     const tab = page.tabId ? tabs.find((t) => t.tabId === page.tabId) : undefined;
     const next =
@@ -53,7 +71,7 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
     return () => {
       live = false;
     };
-  }, [nearEnd, nextStart, launch, tabs, page.slug, page.tabId, page.storefrontId, contentId, screen]);
+  }, [nearEnd, nextStart, launch, tabs, page.slug, page.tabId, page.storefrontId, contentId, screen, dt]);
 
   // Inside the details dialog the page is as tall as its content, not the window.
   const inDialog = useContext(DialogRoomContext) !== null;
@@ -65,6 +83,23 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
     (r) => r.visible !== false && r.source.count !== 0,
   );
   const sp = page.spacing;
+  // The first row of cards is on screen (or just under the hero) when the page opens: its pictures load
+  // at once instead of waiting to be seen. Every other row's load as they near the screen.
+  const firstRow = rails.find((r) => r.layout !== 'hero')?.key;
+  // Each row's place among the rows (the hero is not a row), for the batches of Page → Loading.
+  const rowIndex = new Map(rails.filter((r) => r.layout !== 'hero').map((r, i) => [r.key, i]));
+  // The viewer reached row `i`: if it is within `railsNextWithin` rows of the last row let in, the next
+  // `railsNext` rows are let in (more batches at once when the viewer jumped far down).
+  const reached = (i: number) => {
+    if (!loading) return;
+    const next = Math.max(1, loading.railsNext ?? 5);
+    const within = Math.max(0, loading.railsNextWithin ?? 2);
+    setLetIn((n) => {
+      let out = n;
+      while (i >= out - 1 - within) out += next;
+      return out;
+    });
+  };
   // A rail whose titles came back none (a library emptied since the page was asked for: the
   // page's `count` still says 1, the list fetched again after the last Remove says 0) draws nothing.
   const items = useAppSelector((s) => s.pages.items);
@@ -118,6 +153,10 @@ export function PageScreen({ page, contentId, screen }: { page: Page; contentId?
               <Rail
                 rail={rail}
                 blocks={blocks}
+                eager={rail.key === firstRow}
+                loading={loading}
+                canLoad={loading ? (rowIndex.get(rail.key) ?? 0) < letIn : undefined}
+                onSeen={() => reached(rowIndex.get(rail.key) ?? 0)}
                 onOpen={open}
                 onAction={act}
                 onSeeAll={(r) =>

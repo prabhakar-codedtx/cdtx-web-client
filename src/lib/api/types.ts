@@ -703,6 +703,25 @@ export interface Page {
   paging: { start: number | null; rows: number | null; total: number | null; nextStart: number | null };
   /** The page a rail's "See all" opens. Absent on an older server: the client's own default is used. */
   seeAllPage?: SeeAllPageDesign;
+  /** How to load the rails' titles bit by bit on this device (Page → Loading in the CMS). Absent on an
+   * older server: each rail loads its titles when it comes near the screen. */
+  loading?: PageLoading;
+}
+
+/**
+ * Page → Loading, for this device. Down the page: the titles of the first `railsFirst` rows (the hero is
+ * extra), then `railsNext` more when the viewer comes within `railsNextWithin` rows of the last batch.
+ * Along a rail: its `contentUrl` asks for the first window; then `titlesNext` more (`offset`) when the viewer
+ * is `titlesNextWithin` cards from the end, up to `titlesMax` (and the call's `header.count`).
+ */
+export interface PageLoading {
+  railsFirst: number | null;
+  railsNext: number | null;
+  railsNextWithin: number | null;
+  titlesFirst: number | null;
+  titlesNext: number | null;
+  titlesNextWithin: number | null;
+  titlesMax: number | null;
 }
 
 /** How the "See all" list page is drawn (lengths in the device's unit, already scaled). */

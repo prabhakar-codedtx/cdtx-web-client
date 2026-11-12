@@ -4,9 +4,10 @@ import { loadItems } from '@/app/pagesSlice';
 import type { Block, Fill, Rail, Title } from '@/lib/api/types';
 import { DialogRoomContext } from '@/lib/device/dialogContext';
 import { useElementWidth, useViewportHeight } from '@/lib/device/useElementWidth';
-import { imageFor } from '@/lib/render/fields';
+import { imageFor, imageSrc } from '@/lib/render/fields';
 import { rgba } from '@/lib/render/paint';
 import { CardView } from '@/render/CardView';
+import { Img } from '@/render/Img';
 
 /**
  * The hero (`rail.layout: hero`, the page's first rail): one slide per title, drawn full width.
@@ -63,7 +64,8 @@ export function HeroBanner({
   const bottom = Math.max(0, hl?.bannerBottom ?? 0);
   const fade = Math.max(0, hl?.backdropFade ?? 0);
   const pageColor =
-    (pageBackground?.type === 'color' ? rgba(pageBackground.color) : rgba(pageBackground?.fallbackColor)) ?? '#000000';
+    (pageBackground?.type === 'color' ? rgba(pageBackground.color) : rgba(pageBackground?.fallbackColor)) ??
+    '#000000';
   // The arrows show while the pointer is over the hero (or a button in it has focus).
   const [over, setOver] = useState(false);
   const round = (hl?.arrowStyle ?? 'circle') === 'circle';
@@ -75,6 +77,25 @@ export function HeroBanner({
 
   const items = entry?.status === 'ready' ? (entry.data ?? []) : [];
   const count = items.length;
+
+  // Only the slide on screen is drawn. The next slide's picture is fetched ahead, quietly, so autoplay
+  // or the arrow shows it at once instead of an empty banner while it loads.
+  const background = block?.card.background;
+  const aspect = block?.card.imageAspect ?? null;
+  const loaded = entry?.status === 'ready' ? entry.data : null;
+  useEffect(() => {
+    const n = loaded?.length ?? 0;
+    if (n < 2) return;
+    const next = loaded?.[(Math.min(index, n - 1) + 1) % n] ?? null;
+    const src =
+      background?.type === 'image' && background.image
+        ? imageSrc(background.image, next, aspect)
+        : imageFor(next, aspect);
+    if (!src) return;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = src;
+  }, [index, loaded, background, aspect]);
 
   useEffect(() => {
     const sec = hl?.autoAdvanceSec;
@@ -157,10 +178,14 @@ export function HeroBanner({
     >
       {art && (
         // The slide's art, blurred and darkened, fills the space behind and beside the banner.
-        <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-          <img
+        <div
+          aria-hidden
+          style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}
+        >
+          <Img
             src={art}
-            alt=""
+            // On screen at once, but behind the banner: fetched now, after the banner's own picture.
+            priority="eager"
             style={{
               width: '100%',
               height: '100%',
@@ -169,7 +194,14 @@ export function HeroBanner({
               filter: `blur(${hl?.backdropBlur ?? 60}px)`,
             }}
           />
-          <div style={{ position: 'absolute', inset: 0, background: '#000', opacity: (hl?.backdropDim ?? 40) / 100 }} />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: '#000',
+              opacity: (hl?.backdropDim ?? 40) / 100,
+            }}
+          />
           {fade > 0 && (
             // The bottom of the backdrop melts into the page's colour: no line where the hero ends.
             <div
@@ -188,14 +220,21 @@ export function HeroBanner({
       {width > 0 && (
         <div
           key={item?.id ?? 'empty'}
-          style={{ position: 'relative', marginLeft: leftInset + side, width: bannerWidth, borderRadius: radius, overflow: 'hidden' }}
+          style={{
+            position: 'relative',
+            marginLeft: leftInset + side,
+            width: bannerWidth,
+            borderRadius: radius,
+            overflow: 'hidden',
+          }}
         >
           <CardView
             block={block}
             title={item}
             width={bannerWidth}
             height={height}
-            priority
+            // What the viewer sees first: fetched ahead of every other picture on the page.
+            priority="high"
             onOpen={tappable ? (it) => onOpen(it, rail) : undefined}
             onAction={onAction}
           />
@@ -224,10 +263,9 @@ export function HeroBanner({
                 onClick={() => setIndex(i)}
               >
                 {src && (
-                  <img
+                  // A strip that scrolls sideways: a thumbnail loads as it nears the screen.
+                  <Img
                     src={src}
-                    alt=""
-                    draggable={false}
                     style={{
                       display: 'block',
                       width: thumbs.thumbnailWidth ?? undefined,

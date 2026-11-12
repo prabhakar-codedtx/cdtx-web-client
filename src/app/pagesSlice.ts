@@ -3,13 +3,15 @@ import {
   DETAIL_SCREEN,
   getDetailPage,
   getPage,
-  getRailItems,
+  getRailWindow,
+  railWindowUrl,
   getTabPage,
   setWatchlist,
 } from '@/lib/api/endpoints';
 import { showToast } from '@/app/uiSlice';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { ApiError } from '@/lib/api/client';
+import { limiter, wait, worthRetrying } from '@/lib/api/queue';
 import type { Page, Rail, Title } from '@/lib/api/types';
 import type { RootState } from '@/app/store';
 
@@ -40,6 +42,14 @@ interface PagesState {
   latest: Record<string, string>;
   /** Goes up each time the viewer's own progress is saved: a screen showing it asks again. */
   viewerVersion: number;
+  /** Paging a rail sideways, by its `contentUrl`: how many titles it holds (`header.count`; null:
+   * unknown) and whether its next window is on its way. */
+  more: Record<string, RailMore>;
+}
+
+interface RailMore {
+  total: number | null;
+  loading: boolean;
 }
 
 const failure = (e: unknown): { error: string; code: number | null } => ({
@@ -96,14 +106,58 @@ const VIEWER_SOURCES = new Set(['my_list', 'continue_watching']);
 export const isViewerRail = (rail: Pick<Rail, 'source'>): boolean =>
   VIEWER_SOURCES.has(rail.source.type ?? '');
 
+/**
+ * The rails' title calls go out a few at a time: twenty at once (a long Home screen scrolled fast)
+ * went past the browser's connections per server and the backend's database, and most timed out.
+ */
+const railCalls = limiter(4);
+/** How long a rail whose titles did not come waits before it asks once more. */
+const RETRY_AFTER_MS = 2000;
+
+/**
+ * One rail's titles, in turn with the other rails. A call that got no answer, or the server's own
+ * failure, is asked once more after a short wait (a moment's network drop must not lose the rail for
+ * the whole visit); a second failure, or a 4xx, is final. The wait does not hold a place in the queue.
+ */
+async function fetchRailItems(contentUrl: string): Promise<{ items: Title[]; count: number | null }> {
+  try {
+    return await railCalls(() => getRailWindow(contentUrl));
+  } catch (e) {
+    if (!worthRetrying(e)) throw e;
+    await wait(RETRY_AFTER_MS);
+    return railCalls(() => getRailWindow(contentUrl));
+  }
+}
+
 /** A rail's titles, by the rail's own `source.contentUrl` (complete as the server sent it). */
 export const loadItems = createAsyncThunk(
   'pages/items',
-  async (contentUrl: string) => ({ contentUrl, items: await getRailItems(contentUrl) }),
+  async (contentUrl: string) => ({ contentUrl, ...(await fetchRailItems(contentUrl)) }),
   {
     condition: (url, { getState }) => {
       const e = (getState() as RootState).pages.items[url];
       return !e || e.status === 'failed';
+    },
+  },
+);
+
+/**
+ * A rail's next window of titles, sideways: `limit` more from the ones it has (`offset`), never past
+ * `max` (Page → Loading's "most titles in a rail") or the rail's own total. Asked once at a time.
+ */
+export const loadMoreItems = createAsyncThunk(
+  'pages/moreItems',
+  async ({ contentUrl, limit }: { contentUrl: string; limit: number; max: number }, { getState }) => {
+    const have = (getState() as RootState).pages.items[contentUrl]?.data?.length ?? 0;
+    return { contentUrl, ...(await fetchRailItems(railWindowUrl(contentUrl, have, limit))) };
+  },
+  {
+    condition: ({ contentUrl, max }, { getState }) => {
+      const state = (getState() as RootState).pages;
+      const have = state.items[contentUrl];
+      const more = state.more[contentUrl];
+      if (have?.status !== 'ready' || !have.data || more?.loading) return false;
+      return have.data.length < Math.min(max, more?.total ?? Infinity);
     },
   },
 );
@@ -152,12 +206,12 @@ export const toggleWatchlist = createAsyncThunk<void, Title>(
 /** A rail's titles again, kept on screen until the new ones come (unlike `loadItems`, which empties it). */
 export const refreshItems = createAsyncThunk('pages/refreshItems', async (contentUrl: string) => ({
   contentUrl,
-  items: await getRailItems(contentUrl),
+  ...(await fetchRailItems(contentUrl)),
 }));
 
 const slice = createSlice({
   name: 'pages',
-  initialState: { pages: {}, items: {}, latest: {}, viewerVersion: 0 } as PagesState,
+  initialState: { pages: {}, items: {}, latest: {}, viewerVersion: 0, more: {} } as PagesState,
   reducers: {
     /** Every loaded copy of a title says whether the viewer saved it (exactly one of the two flags). */
     savedChanged: (s, a: { payload: { id: string; saved: boolean } }) => {
@@ -205,11 +259,36 @@ const slice = createSlice({
     b.addCase(loadItems.fulfilled, (s, a) => {
       if (s.latest[a.meta.arg] !== a.meta.requestId) return;
       s.items[a.payload.contentUrl] = { status: 'ready', data: a.payload.items, error: null, code: null };
+      s.more[a.payload.contentUrl] = { total: a.payload.count, loading: false };
     });
     b.addCase(refreshItems.fulfilled, (s, a) => {
       // Add, then Remove at once: the list asked for after the Remove is the one kept.
       if (s.latest[a.meta.arg] !== a.meta.requestId) return;
       s.items[a.payload.contentUrl] = { status: 'ready', data: a.payload.items, error: null, code: null };
+      s.more[a.payload.contentUrl] = { total: a.payload.count, loading: false };
+    });
+    b.addCase(loadMoreItems.pending, (s, a) => {
+      const url = a.meta.arg.contentUrl;
+      s.more[url] = { total: s.more[url]?.total ?? null, loading: true };
+    });
+    b.addCase(loadMoreItems.fulfilled, (s, a) => {
+      const url = a.payload.contentUrl;
+      const entry = s.items[url];
+      if (!entry?.data) return;
+      // A title already in the row (the list moved between two calls) is not drawn twice.
+      const seen = new Set(entry.data.map((t) => t.id));
+      const added = a.payload.items.filter((t) => !seen.has(t.id));
+      entry.data.push(...added);
+      // A window that brings nothing new is the end, whatever the total said (a rail can count a title
+      // it then does not send, e.g. one not available in the viewer's region).
+      const total = added.length === 0 ? entry.data.length : a.payload.count;
+      s.more[url] = { total, loading: false };
+    });
+    b.addCase(loadMoreItems.rejected, (s, a) => {
+      const url = a.meta.arg.contentUrl;
+      if (!s.more[url]) return;
+      // Failed twice (the call is retried once): no more for this visit.
+      s.more[url] = { total: s.items[url]?.data?.length ?? null, loading: false };
     });
     b.addCase(loadItems.rejected, (s, a) => {
       if (s.latest[a.meta.arg] !== a.meta.requestId) return;

@@ -15,6 +15,11 @@ interface LaunchState {
   navStyle: NavBarStyle | null;
   /** The device the launch config and tabs were asked for; another device asks again. */
   dt: string | null;
+  /**
+   * The latest start asked for (its request id). Two can overlap (the window crossed the phone line while
+   * the first was on its way): only the latest one's answer is kept, whichever comes back last.
+   */
+  latest: string | null;
 }
 
 const initial: LaunchState = {
@@ -25,6 +30,7 @@ const initial: LaunchState = {
   tabs: [],
   navStyle: null,
   dt: null,
+  latest: null,
 };
 
 /** Start: the launch config (the one address the client knows), the Design System, then the tabs. */
@@ -45,11 +51,13 @@ const slice = createSlice({
   initialState: initial,
   reducers: {},
   extraReducers: (b) => {
-    b.addCase(boot.pending, (s) => {
+    b.addCase(boot.pending, (s, a) => {
+      s.latest = a.meta.requestId;
       s.status = s.launch ? s.status : 'loading';
       s.error = null;
     });
     b.addCase(boot.fulfilled, (s, a) => {
+      if (s.latest !== a.meta.requestId) return;
       s.status = 'ready';
       s.launch = a.payload.launch;
       s.theme = a.payload.theme;
@@ -58,6 +66,7 @@ const slice = createSlice({
       s.dt = a.payload.dt;
     });
     b.addCase(boot.rejected, (s, a) => {
+      if (s.latest !== a.meta.requestId) return;
       s.status = 'failed';
       s.error = a.error.message ?? 'Could not start';
     });

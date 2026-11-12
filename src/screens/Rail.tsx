@@ -1,7 +1,7 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, type CSSProperties, type FocusEvent } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { isViewerRail, loadItems, refreshItems } from '@/app/pagesSlice';
-import type { Atom, Block, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
+import { isViewerRail, loadItems, loadMoreItems, refreshItems } from '@/app/pagesSlice';
+import type { Atom, Block, PageLoading, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { useInView } from '@/lib/device/useInView';
 import { CardView } from '@/render/CardView';
@@ -202,23 +202,90 @@ export function Rail({
   onOpen,
   onAction,
   onSeeAll,
+  eager = false,
+  canLoad,
+  loading,
+  onSeen,
 }: {
   rail: RailJson;
   blocks: Record<string, Block>;
   onOpen: (title: Title, rail: RailJson) => void;
   onAction: (action: string, title: Title | null) => void;
   onSeeAll: (rail: RailJson) => void;
+  /** The page's first row: the cards on screen load their pictures at once, not lazily. */
+  eager?: boolean;
+  /** Page → Loading: whether this row's batch may ask for its titles now. Missing (an older server):
+   * the row asks when it comes near the screen. */
+  canLoad?: boolean;
+  /** Page → Loading for this device: how this row's titles load sideways. Missing: one window only. */
+  loading?: PageLoading;
+  /** The viewer reached this row (it is on screen, or a card in it has focus): the page may ask for the
+   * next batch of rows. */
+  onSeen?: () => void;
 }) {
   const dispatch = useAppDispatch();
   const block = rail.blockKey ? (blocks[rail.blockKey] ?? null) : null;
   const header = rail.headerKey ? (blocks[rail.headerKey] ?? null) : null;
   const footer = rail.footerKey ? (blocks[rail.footerKey] ?? null) : null;
-  const [inViewRef, inView] = useInView<HTMLElement>();
   const [widthRef, available] = useElementWidth<HTMLDivElement>();
+  // Watched only once the row is drawn at its real height (its width known): see `useInView`.
+  const [inViewRef, inView] = useInView<HTMLElement>({ enabled: available > 0 });
+  // On screen now (no margin): the viewer has reached this row.
+  const [seenRef, seen] = useInView<HTMLElement>({ rootMargin: '0px', once: false, enabled: available > 0 });
+  const sectionRef = useCallback(
+    (el: HTMLElement | null) => {
+      inViewRef(el);
+      seenRef(el);
+    },
+    [inViewRef, seenRef],
+  );
+  // The latest `onSeen` (a new function each render of the page), read when the row is reached.
+  const onSeenRef = useRef(onSeen);
+  useEffect(() => {
+    onSeenRef.current = onSeen;
+  });
+  useEffect(() => {
+    if (seen) onSeenRef.current?.();
+  }, [seen]);
   const rowRef = useRef<HTMLDivElement>(null);
   const url = rail.source.contentUrl ?? '';
   const hasTitles = (rail.source.count ?? 0) > 0;
   const entry = useAppSelector((s) => s.pages.items[url]);
+  const more = useAppSelector((s) => s.pages.more[url]);
+
+  // Sideways (Page → Loading): the next `titlesNext` titles when the viewer is `titlesNextWithin` cards
+  // from the end of the row, up to `titlesMax` and the rail's own total. Only a row that scrolls sideways.
+  const sideways =
+    rail.layout !== 'banner' && rail.layout !== 'grid' && rail.railLayout.direction !== 'vertical';
+  const paging =
+    sideways && loading?.titlesNext
+      ? { next: loading.titlesNext, within: loading.titlesNextWithin ?? 3, max: loading.titlesMax ?? 40 }
+      : null;
+  const have = entry?.status === 'ready' ? (entry.data?.length ?? 0) : 0;
+  const hasMore = !!paging && have > 0 && have < Math.min(paging.max, more?.total ?? Infinity);
+  const askMore = useCallback(() => {
+    if (paging && url) void dispatch(loadMoreItems({ contentUrl: url, limit: paging.next, max: paging.max }));
+  }, [dispatch, url, paging?.next, paging?.max]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Within `titlesNextWithin` cards of the row's end: ask for the next window. */
+  const checkRowEnd = useCallback(() => {
+    const row = rowRef.current;
+    const first = row?.firstElementChild as HTMLElement | null | undefined;
+    if (!row || !first || !paging || !hasMore) return;
+    const gapPx = parseFloat(getComputedStyle(row).columnGap) || 0;
+    const room = paging.within * (first.offsetWidth + gapPx);
+    if (row.scrollWidth - row.scrollLeft - row.clientWidth <= room) askMore();
+  }, [paging?.within, hasMore, askMore]); // eslint-disable-line react-hooks/exhaustive-deps
+  // After each window, and on a screen wide enough to show the end at once: maybe the next one now.
+  useEffect(() => {
+    checkRowEnd();
+  }, [have, checkRowEnd]);
+  /** TV: focus on one of the last `titlesNextWithin` cards asks for the next window. */
+  const onRowFocus = (e: FocusEvent<HTMLDivElement>) => {
+    const row = rowRef.current;
+    if (!row || !paging || !hasMore) return;
+    const card = Array.from(row.children).findIndex((c) => c.contains(e.target as Node));
+    if (card >= 0 && card >= have - paging.within - 1) askMore();
+  };
 
   // The viewer's own rails (My list, Continue Watching) are asked for again each time their screen is
   // shown, at once (not when in view): what was loaded before may be out of date, and an empty list
@@ -239,10 +306,11 @@ export function Rail({
         return;
       }
     }
-    if (inView && missing) void dispatch(loadItems(url));
+    // With Page → Loading the row asks when its batch is let in; else when it comes near the screen.
+    if ((canLoad ?? inView) && missing) void dispatch(loadItems(url));
     // `entry` only decides whether there is something to refresh; `missing` asks again when it goes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inView, url, hasTitles, viewer, missing, dispatch]);
+  }, [inView, canLoad, url, hasTitles, viewer, missing, dispatch]);
 
   // Nothing to show (`count` 0, no design), or titles that came back empty or failed: no room taken.
   if (!hasTitles || !block) return null;
@@ -269,6 +337,17 @@ export function Rail({
     items = items.slice(0, cols * rail.grid.maxRows);
   }
   const scrolls = layout === 'carousel' && !vertical;
+  // The next window on its way: its cards are drawn empty (shimmering) at the end of the row meanwhile.
+  if (scrolls && loaded && more?.loading && paging) {
+    const coming = Math.max(
+      0,
+      Math.min(paging.next, Math.min(paging.max, more.total ?? Infinity) - loaded.length),
+    );
+    items = [...items, ...Array.from({ length: coming }, () => null)];
+  }
+  // On the page's first row, the cards on screen when it opens (the ones across the lane, or the top two
+  // of a column) load their pictures at once; the rest of the row stays lazy, loaded as it is scrolled to.
+  const onScreen = !eager ? 0 : vertical ? 2 : Math.max(1, Math.ceil((lane - start) / Math.max(1, w + gap)));
   // TV: free room around the cards for the focus look (a focused card grows and glows).
   const inset = rl.focusInset;
   const t = rail.titleStyle;
@@ -322,7 +401,11 @@ export function Rail({
             >
               <AtomView
                 atom={
-                  a.action === 'see_all' ? (arrowOnlyLink ? arrowOnly(a) : withLabel(a, rail.seeAll.label)) : a
+                  a.action === 'see_all'
+                    ? arrowOnlyLink
+                      ? arrowOnly(a)
+                      : withLabel(a, rail.seeAll.label)
+                    : a
                 }
                 ctx={stripCtx}
                 inFrame={false}
@@ -365,7 +448,12 @@ export function Rail({
   const linkLeft = !inlineArrow && sa.position === 'left';
 
   return (
-    <section ref={inViewRef} aria-label={rail.title ?? undefined} style={fillCss(rail.background)}>
+    <section
+      ref={sectionRef}
+      aria-label={rail.title ?? undefined}
+      style={fillCss(rail.background)}
+      onFocusCapture={() => onSeenRef.current?.()}
+    >
       <div ref={widthRef}>
         {(!t.hidden && rail.title) || link ? (
           <div
@@ -407,6 +495,8 @@ export function Rail({
             {headerNode && <div style={{ marginBottom: headerGap }}>{headerNode}</div>}
             <div
               ref={rowRef}
+              onScroll={scrolls ? checkRowEnd : undefined}
+              onFocusCapture={scrolls ? onRowFocus : undefined}
               style={{
                 display: 'flex',
                 flexDirection: vertical ? 'column' : 'row',
@@ -429,13 +519,14 @@ export function Rail({
                   width={w}
                   height={h}
                   rank={i + 1}
+                  priority={i < onScreen ? 'eager' : 'lazy'}
                   onOpen={tappable ? (it) => onOpen(it, rail) : undefined}
                   onAction={onAction}
                 />
               ))}
               {/* After the last card of a row that scrolls: only once its titles are here, and not when the
                   tap goes nowhere. */}
-              {scrolls && rail.seeAll.endCard && loaded && rail.seeAll.tap?.type !== 'none' && (
+              {scrolls && rail.seeAll.endCard && loaded && !hasMore && rail.seeAll.tap?.type !== 'none' && (
                 <EndCard
                   rail={rail}
                   design={rail.seeAll.endCardBlockKey ? (blocks[rail.seeAll.endCardBlockKey] ?? null) : null}
