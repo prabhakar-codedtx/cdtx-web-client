@@ -664,6 +664,10 @@ export interface Rail {
     endCardBlockKey?: string | null;
     /** Font, size, weight, case and `color`. */
     text?: TextStyle | null;
+    /** The grid the Collection opens (`tap.type` `collection`): a grid rail designed in the CMS. Its look draws this
+     * rail's titles: card design (`blockKey`), columns (`railLayout` `itemsPerView`), gaps, padding
+     * (`railLayout.bodyPadding`), title style. Its own titles are not used. Null (or an older server): the app's grid. */
+    collection?: Rail | null;
   };
   grid: { maxRows: number | null } | null;
   blockKey: string | null;

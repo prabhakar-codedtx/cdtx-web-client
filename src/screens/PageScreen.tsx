@@ -12,6 +12,7 @@ import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
 import { LoadingInspector } from '@/screens/LoadingInspector';
 import { Rail } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
+import { collectionBlock } from '@/screens/collectionBlock';
 
 /**
  * One screen from its page JSON (`RENDERING-GUIDE.md` 3): the page's `background`, then `rails` in
@@ -181,13 +182,7 @@ export function PageScreen({
                 onOpen={open}
                 onAction={act}
                 onSeeAll={(r) =>
-                  seeAll(
-                    r,
-                    r.blockKey ? (blocks[r.blockKey] ?? null) : null,
-                    page.slug,
-                    page.background,
-                    page.seeAllPage ?? null,
-                  )
+                  seeAll(r, collectionBlock(r, blocks), page.slug, page.background, page.seeAllPage ?? null)
                 }
               />
             </div>
