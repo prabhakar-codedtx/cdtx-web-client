@@ -10,6 +10,7 @@ import { CardView } from '@/render/CardView';
 import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
 import { cardSize } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
+import { collectionBlock } from '@/screens/collectionBlock';
 
 /** The design of this page when the server sends none (an older server): what it sent before it did. */
 const FALLBACK: SeeAllPageDesign = {
@@ -50,7 +51,7 @@ export function SeeAllScreen() {
   const sent = location.state as {
     rail?: Rail;
     block?: Block | null;
-    background?: Fill | null;
+    pageBackground?: Fill | null;
     design?: SeeAllPageDesign | null;
   } | null;
   const [found, setFound] = useState<{
@@ -67,7 +68,7 @@ export function SeeAllScreen() {
 
   const rail = sent?.rail ?? found?.rail ?? null;
   const block = sent?.rail ? (sent.block ?? null) : (found?.block ?? null);
-  const background = sent?.rail ? (sent.background ?? null) : (found?.background ?? null);
+  const background = sent?.rail ? (sent.pageBackground ?? null) : (found?.background ?? null);
   const d = (sent?.rail ? sent.design : found?.design) ?? FALLBACK;
 
   // Opened without the tap (a link, a reload): the rail is read from its page.
@@ -81,7 +82,7 @@ export function SeeAllScreen() {
         if (r)
           setFound({
             rail: r,
-            block: r.blockKey ? (p.blocks[r.blockKey] ?? null) : null,
+            block: collectionBlock(r, p.blocks),
             background: p.background,
             design: p.seeAllPage ?? null,
           });
@@ -185,18 +186,31 @@ export function SeeAllScreen() {
       </main>
     );
 
-  const rl = rail.railLayout;
+  // The grid rail designed in the CMS for this See all (its columns, gaps, padding, title style), else the rail's own.
+  const grid = rail.seeAll.collection ?? null;
+  const rl = grid?.railLayout ?? rail.railLayout;
   const gap = rl.gap ?? 12;
-  const side = d.sidePadding;
+  const rowGap = grid ? (rl.rowGap ?? gap) : gap;
+  const own = grid?.railLayout.bodyPadding ?? null;
+  const pad = {
+    top: own?.top ?? d.topPadding,
+    right: own?.right ?? d.sidePadding,
+    bottom: own?.bottom ?? d.bottomPadding,
+    left: own?.left ?? d.sidePadding,
+  };
   const back = d.backButton;
   // `available` is the screen's whole width, the sidebar's room included.
-  const lane = Math.max(0, available - leftInset - 2 * side);
+  const lane = Math.max(0, available - leftInset - pad.left - pad.right);
   const size = block ? cardSize(rl, block, 'grid', lane, items.length) : { w: 0, h: 0 };
+  // A grid rail's "cards across" is its columns; without one, as many as fit.
+  const columns =
+    grid && rl.mode === 'count' && rl.itemsPerView ? Math.max(1, Math.floor(rl.itemsPerView)) : null;
+  const titleStyle = grid?.titleStyle ?? rail.titleStyle;
   const name = rail.title || rail.seeAll.label || 'All titles';
 
   return (
     <main ref={widthRef} style={{ ...frame, paddingTop: topRoom, paddingLeft: leftInset }}>
-      <div style={{ padding: `${d.topPadding}px ${side}px ${d.bottomPadding}px` }}>
+      <div style={{ padding: `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px` }}>
         <div
           style={{
             display: 'flex',
@@ -236,7 +250,7 @@ export function SeeAllScreen() {
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          <h1 style={{ ...textCss(rail.titleStyle, d.titleScale), margin: 0 }}>{name}</h1>
+          <h1 style={{ ...textCss(titleStyle, d.titleScale), margin: 0 }}>{name}</h1>
         </div>
         {!block ? (
           <div role="alert">This rail has no card design to draw its titles with.</div>
@@ -245,8 +259,11 @@ export function SeeAllScreen() {
             role="list"
             style={{
               display: 'grid',
-              gridTemplateColumns: `repeat(auto-fill, ${size.w}px)`,
-              gap,
+              gridTemplateColumns: columns
+                ? `repeat(${columns}, ${size.w}px)`
+                : `repeat(auto-fill, ${size.w}px)`,
+              columnGap: gap,
+              rowGap,
               justifyContent: 'start',
             }}
           >

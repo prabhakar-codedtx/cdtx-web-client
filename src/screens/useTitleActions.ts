@@ -6,6 +6,20 @@ import { hasDetailPage, shareLink } from '@/lib/api/endpoints';
 import { toggleWatchlist } from '@/app/pagesSlice';
 import type { Block, Fill, Rail, SeeAllPageDesign, Title } from '@/lib/api/types';
 
+/** A See all's storefront (`seeAll.tap` of type `page`): its slug, read from the address the server
+ * sent (`…/storefront/{product}/{slug}?…`). Null when there is none. */
+export function storefrontOf(target: string | null | undefined): string | null {
+  if (!target) return null;
+  try {
+    const parts = new URL(target, 'http://api.invalid').pathname.split('/').filter(Boolean);
+    const at = parts.indexOf('storefront');
+    const slug = at >= 0 ? parts[at + 2] : undefined;
+    return slug && /^[a-z0-9-]+$/.test(slug) ? slug : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * What a tap does. The JSON says which tap: a card uses `rail.tap.cards[title.id]`, else
  * `rail.tap.card` (`detail`, `player`, `collection`, `link`, `none`); an atom its `action`. The client
@@ -98,7 +112,8 @@ export function useTitleActions() {
     [act, detail, dispatch],
   );
 
-  /** A rail's "See all", as its `seeAll.tap` says: a link, nothing, or (the default) all of the rail's titles in a grid. */
+  /** A rail's "See all", as its `seeAll.tap` says: a link, nothing, a storefront (`page`, its address sent by the
+   * server), or (the default) all of the rail's titles in a grid. */
   const seeAll = useCallback(
     (
       rail: Rail,
@@ -113,12 +128,20 @@ export function useTitleActions() {
         if (tap.target) window.open(tap.target, '_blank', 'noopener');
         return;
       }
+      // A storefront the editor picked (Movies, Shows...): the server sends its address.
+      const storefront = tap?.type === 'page' ? storefrontOf(tap.target) : null;
+      if (storefront) {
+        navigate(`/p/${encodeURIComponent(storefront)}`);
+        return;
+      }
       if (!slug) {
         dispatch(showToast('This list cannot be opened from here.'));
         return;
       }
       navigate(`/list/${encodeURIComponent(slug)}/${encodeURIComponent(rail.key)}`, {
-        state: { rail, block, background, design },
+        // `pageBackground`, not `background`: the router's `state.background` is the screen a details dialog
+        // draws over (`App.tsx`), so a page fill under that name would replace the grid with that screen.
+        state: { rail, block, pageBackground: background, design },
       });
     },
     [navigate, dispatch],
