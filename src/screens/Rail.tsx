@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type CSSProperties, type FocusEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FocusEvent } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { isViewerRail, loadItems, loadMoreItems, refreshItems } from '@/app/pagesSlice';
 import type { Atom, Block, PageLoading, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
@@ -8,6 +8,8 @@ import { logLoading } from '@/lib/debug/loadingLog';
 import { CardView } from '@/render/CardView';
 import { AtomView, type PartCtx } from '@/render/Parts';
 import { fillCss, paddingCss, textCss } from '@/lib/render/paint';
+import { railForChip, shownChip } from '@/lib/render/chips';
+import { ChipRow } from './ChipRow';
 
 /**
  * One rail (`RENDERING-GUIDE.md` 4): its `background`, its heading (`title` in `titleStyle`), the
@@ -198,7 +200,7 @@ function EndCard({
 }
 
 export function Rail({
-  rail,
+  rail: placed,
   blocks,
   onOpen,
   onAction,
@@ -225,6 +227,13 @@ export function Rail({
   onSeen?: () => void;
 }) {
   const dispatch = useAppDispatch();
+  // A chip rail: the row of chips above the cards, and the picked chip's titles in place of the rail's
+  // own (`railForChip`), so loading, "See all" and its count follow the chip. Each chip's titles stay
+  // loaded (kept by their address), and each keeps where its row was scrolled to.
+  const [pickedChip, setPickedChip] = useState<string | null>(null);
+  const chip = shownChip(placed, pickedChip);
+  const rail = railForChip(placed, chip);
+  const chipScroll = useRef<Record<string, number>>({});
   const block = rail.blockKey ? (blocks[rail.blockKey] ?? null) : null;
   const header = rail.headerKey ? (blocks[rail.headerKey] ?? null) : null;
   const footer = rail.footerKey ? (blocks[rail.footerKey] ?? null) : null;
@@ -252,6 +261,14 @@ export function Rail({
   const url = rail.source.contentUrl ?? '';
   const hasTitles = (rail.source.count ?? 0) > 0;
   const entry = useAppSelector((s) => s.pages.items[url]);
+  // Back on a chip: its row where it was left (a new chip starts at its first card).
+  useEffect(() => {
+    if (chip && rowRef.current) rowRef.current.scrollLeft = chipScroll.current[chip.key] ?? 0;
+  }, [chip]);
+  const pickChip = (key: string) => {
+    if (chip && rowRef.current) chipScroll.current[chip.key] = rowRef.current.scrollLeft;
+    setPickedChip(key);
+  };
   const more = useAppSelector((s) => s.pages.more[url]);
 
   // Sideways (Page → Loading): the next `titlesNext` titles when the viewer is `titlesNextWithin` cards
@@ -512,6 +529,18 @@ export function Rail({
         {available > 0 && (
           <div style={paddingCss(body)}>
             {headerNode && <div style={{ marginBottom: headerGap }}>{headerNode}</div>}
+            {/* A chip rail: its chips between the title (or header design) and the cards. */}
+            {placed.chips && placed.chips.items.length > 0 && (
+              <ChipRow
+                chips={placed.chips.items}
+                selected={chip?.key ?? null}
+                onSelect={pickChip}
+                fontFamily={t.fontFamily ?? undefined}
+                paddingLeft={start}
+                paddingRight={end}
+                marginBottom={headerGap || 12}
+              />
+            )}
             <div
               ref={rowRef}
               onScroll={scrolls ? checkRowEnd : undefined}

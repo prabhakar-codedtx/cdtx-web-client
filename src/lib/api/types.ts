@@ -591,6 +591,27 @@ export interface RailLayout {
   bodyPadding: Sides | null;
 }
 
+/** One chip of a chip rail (`CMS docs/client-contract/FILTERED-RAILS.md`): its own titles at `contentUrl`. */
+export interface RailChip {
+  /** `all` is the All chip. */
+  key: string;
+  /** Already in the viewer's language. */
+  label: string;
+  /** A picture drawn before the label (an actor's photo, a flag); null: text only. */
+  icon: string | null;
+  /** Its titles (never more than the rail's limit). */
+  count: number | null;
+  contentUrl: string;
+}
+
+/** A chip rail's row of chips: draw them in this order and select `default` first. */
+export interface RailChips {
+  /** language | genre | duration | year | actor | category | custom: a hint only. */
+  type: string | null;
+  default: string;
+  items: RailChip[];
+}
+
 export interface Rail {
   /** This placement on the page. */
   key: string;
@@ -680,6 +701,8 @@ export interface Rail {
     contentUrl: string | null;
     pageSize: number | null;
   };
+  /** A chip rail (`source.type: filtered`): its chips. Absent on any other rail; then `source` is used. */
+  chips?: RailChips | null;
 }
 
 export interface Page {
