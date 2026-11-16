@@ -1,14 +1,30 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FocusEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FocusEvent,
+} from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { isViewerRail, loadItems, loadMoreItems, refreshItems } from '@/app/pagesSlice';
-import type { Atom, Block, PageLoading, Rail as RailJson, RailLayout, Title } from '@/lib/api/types';
+import type {
+  Atom,
+  Block,
+  PageLoading,
+  Rail as RailJson,
+  RailChip,
+  RailLayout,
+  Title,
+} from '@/lib/api/types';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { useInView } from '@/lib/device/useInView';
 import { logLoading } from '@/lib/debug/loadingLog';
 import { CardView } from '@/render/CardView';
 import { AtomView, type PartCtx } from '@/render/Parts';
 import { fillCss, paddingCss, textCss } from '@/lib/render/paint';
-import { railForChip, shownChip } from '@/lib/render/chips';
+import { isTileRail, railForChip, shownChip, tileKey, tileTitle } from '@/lib/render/chips';
 import { ChipRow } from './ChipRow';
 
 /**
@@ -205,6 +221,7 @@ export function Rail({
   onOpen,
   onAction,
   onSeeAll,
+  onTile,
   eager = false,
   canLoad,
   loading,
@@ -213,6 +230,8 @@ export function Rail({
   rail: RailJson;
   blocks: Record<string, Block>;
   onOpen: (title: Title, rail: RailJson) => void;
+  /** A tile of a chip rail drawn as cards was tapped. */
+  onTile?: (chip: RailChip, rail: RailJson) => void;
   onAction: (action: string, title: Title | null) => void;
   onSeeAll: (rail: RailJson) => void;
   /** The page's first row: the cards on screen load their pictures at once, not lazily. */
@@ -231,7 +250,11 @@ export function Rail({
   // own (`railForChip`), so loading, "See all" and its count follow the chip. Each chip's titles stay
   // loaded (kept by their address), and each keeps where its row was scrolled to.
   const [pickedChip, setPickedChip] = useState<string | null>(null);
-  const chip = shownChip(placed, pickedChip);
+  // Chips drawn as cards (`chips.display: cards`): the chips are the rail's cards, a tile each. No chip
+  // is picked and no titles are asked for; a tile opens its own `tap`.
+  const tiles = isTileRail(placed) ? (placed.chips?.items ?? null) : null;
+  const tileCards = useMemo(() => tiles?.map(tileTitle) ?? null, [tiles]);
+  const chip = tiles ? null : shownChip(placed, pickedChip);
   const rail = railForChip(placed, chip);
   const chipScroll = useRef<Record<string, number>>({});
   const block = rail.blockKey ? (blocks[rail.blockKey] ?? null) : null;
@@ -258,8 +281,8 @@ export function Rail({
     if (seen) onSeenRef.current?.();
   }, [seen]);
   const rowRef = useRef<HTMLDivElement>(null);
-  const url = rail.source.contentUrl ?? '';
-  const hasTitles = (rail.source.count ?? 0) > 0;
+  const url = tiles ? '' : (rail.source.contentUrl ?? '');
+  const hasTitles = tiles ? true : (rail.source.count ?? 0) > 0;
   const entry = useAppSelector((s) => s.pages.items[url]);
   // Back on a chip: its row where it was left (a new chip starts at its first card).
   useEffect(() => {
@@ -356,7 +379,7 @@ export function Rail({
   const rl = rail.railLayout;
   const body = rl.bodyPadding;
   const lane = Math.max(0, available - (body?.left ?? 0) - (body?.right ?? 0));
-  const loaded = entry?.status === 'ready' && entry.data ? entry.data : null;
+  const loaded = tileCards ?? (entry?.status === 'ready' && entry.data ? entry.data : null);
   let items: (Title | null)[] = loaded ?? Array.from({ length: rail.source.pageSize ?? 0 }, () => null);
   // An unknown layout is drawn as a carousel.
   const layout = rail.layout === 'banner' || rail.layout === 'grid' ? rail.layout : 'carousel';
@@ -388,6 +411,11 @@ export function Rail({
   const inset = rl.focusInset;
   const t = rail.titleStyle;
   const tappable = rail.tap.card.type !== 'none' || Object.keys(rail.tap.cards).length > 0;
+  /** A tile's card was tapped: the chip it stands for. */
+  const openTile = (card: Title) => {
+    const tapped = tiles?.find((c) => c.key === tileKey(card));
+    if (tapped && tapped.tap?.type !== 'none') onTile?.(tapped, placed);
+  };
 
   // A header or footer that is a strip (`card.display: "strip"`): as wide as the lane and as high as its
   // content, its parts laid out as `card.strip` says. A text bound to `railTitle` is the rail's title.
@@ -530,7 +558,7 @@ export function Rail({
           <div style={paddingCss(body)}>
             {headerNode && <div style={{ marginBottom: headerGap }}>{headerNode}</div>}
             {/* A chip rail: its chips between the title (or header design) and the cards. */}
-            {placed.chips && placed.chips.items.length > 0 && (
+            {!tiles && placed.chips && placed.chips.items.length > 0 && (
               <ChipRow
                 chips={placed.chips.items}
                 selected={chip?.key ?? null}
@@ -568,21 +596,28 @@ export function Rail({
                   height={h}
                   rank={i + 1}
                   priority={i < onScreen ? 'eager' : 'lazy'}
-                  onOpen={tappable ? (it) => onOpen(it, rail) : undefined}
+                  onOpen={tiles ? openTile : tappable ? (it) => onOpen(it, rail) : undefined}
                   onAction={onAction}
                 />
               ))}
               {/* After the last card of a row that scrolls: only once its titles are here, and not when the
                   tap goes nowhere. */}
-              {scrolls && rail.seeAll.endCard && loaded && !hasMore && rail.seeAll.tap?.type !== 'none' && (
-                <EndCard
-                  rail={rail}
-                  design={rail.seeAll.endCardBlockKey ? (blocks[rail.seeAll.endCardBlockKey] ?? null) : null}
-                  width={w}
-                  height={h}
-                  onOpen={() => onSeeAll(rail)}
-                />
-              )}
+              {scrolls &&
+                !tiles &&
+                rail.seeAll.endCard &&
+                loaded &&
+                !hasMore &&
+                rail.seeAll.tap?.type !== 'none' && (
+                  <EndCard
+                    rail={rail}
+                    design={
+                      rail.seeAll.endCardBlockKey ? (blocks[rail.seeAll.endCardBlockKey] ?? null) : null
+                    }
+                    width={w}
+                    height={h}
+                    onOpen={() => onSeeAll(rail)}
+                  />
+                )}
             </div>
             {footer && spanning(footer)}
           </div>
