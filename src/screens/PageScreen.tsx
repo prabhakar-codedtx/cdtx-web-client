@@ -33,7 +33,7 @@ export function PageScreen({
   /** The device the page was asked for as: its later rows are asked for as the same one. */
   dt: string;
 }) {
-  const { open, act, seeAll } = useTitleActions();
+  const { open, act, seeAll, tile } = useTitleActions();
   const launch = useAppSelector((s) => s.launch.launch);
   const tabs = useAppSelector((s) => s.launch.tabs);
   const navStyle = useAppSelector((s) => s.launch.navStyle);
@@ -83,6 +83,8 @@ export function PageScreen({
   // the page's background run under it. The details dialog is drawn over the sidebar: no room there.
   const leftInset = inDialog ? 0 : navLeftInset(navStyle);
   const blocks: Record<string, Block> = Object.assign({}, page.blocks, ...more.map((p) => p.blocks));
+  // What a list opened from this page (a card's or a tile's `collection` tap) is drawn with.
+  const listFrom = { blocks, slug: page.slug, background: page.background, design: page.seeAllPage ?? null };
   const rails = [...page.rails, ...more.flatMap((p) => p.rails)].filter(
     (r) => r.visible !== false && r.source.count !== 0,
   );
@@ -179,7 +181,8 @@ export function PageScreen({
                 loading={loading}
                 canLoad={loading ? (rowIndex.get(rail.key) ?? 0) < letIn : undefined}
                 onSeen={() => reached(rowIndex.get(rail.key) ?? 0)}
-                onOpen={open}
+                onOpen={(t, r) => open(t, r, listFrom)}
+                onTile={(chip, r) => tile(chip, r, listFrom)}
                 onAction={act}
                 onSeeAll={(r) =>
                   seeAll(r, collectionBlock(r, blocks), page.slug, page.background, page.seeAllPage ?? null)

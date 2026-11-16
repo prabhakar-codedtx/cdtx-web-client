@@ -4,7 +4,17 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { openShare, showToast } from '@/app/uiSlice';
 import { hasDetailPage, shareLink } from '@/lib/api/endpoints';
 import { toggleWatchlist } from '@/app/pagesSlice';
-import type { Block, Fill, Rail, SeeAllPageDesign, Title } from '@/lib/api/types';
+import type { Block, Fill, Rail, RailChip, SeeAllPageDesign, Title } from '@/lib/api/types';
+import { railForTile } from '@/lib/render/chips';
+import { collectionBlock } from '@/screens/collectionBlock';
+
+/** The page a tap happens on: what the list a `collection` tap opens needs to be drawn. */
+export interface ListFrom {
+  blocks: Record<string, Block>;
+  slug: string | null;
+  background?: Fill | null;
+  design?: SeeAllPageDesign | null;
+}
 
 /** A See all's storefront (`seeAll.tap` of type `page`): its slug, read from the address the server
  * sent (`…/storefront/{product}/{slug}?…`). Null when there is none. */
@@ -90,8 +100,49 @@ export function useTitleActions() {
     [navigate, detail, dispatch, share],
   );
 
+  /** All of a rail's titles in a grid (`/list/:slug/:key`); `chip` names the tile it was opened from. */
+  const list = useCallback(
+    (rail: Rail, from: ListFrom, chip?: string) => {
+      if (!from.slug) {
+        dispatch(showToast('This list cannot be opened from here.'));
+        return;
+      }
+      const query = chip ? `?chip=${encodeURIComponent(chip)}` : '';
+      navigate(`/list/${encodeURIComponent(from.slug)}/${encodeURIComponent(rail.key)}${query}`, {
+        // `pageBackground`, not `background`: see `seeAll` below.
+        state: {
+          rail,
+          block: collectionBlock(rail, from.blocks),
+          pageBackground: from.background ?? null,
+          design: from.design ?? null,
+        },
+      });
+    },
+    [navigate, dispatch],
+  );
+
+  /** A storefront a tap names (`page`): opened like a tab. False when its address names none. */
+  const storefront = useCallback(
+    (target: string | null | undefined): boolean => {
+      const slug = storefrontOf(target);
+      if (slug) navigate(`/p/${encodeURIComponent(slug)}`);
+      return slug !== null;
+    },
+    [navigate],
+  );
+
+  /** A tile of a chip rail drawn as cards, as its `tap` says: a storefront, else its titles in a grid. */
+  const tile = useCallback(
+    (chip: RailChip, rail: Rail, from: ListFrom) => {
+      if (chip.tap?.type === 'none') return;
+      if (chip.tap?.type === 'page' && storefront(chip.tap.target)) return;
+      list(railForTile(rail, chip), from, chip.key);
+    },
+    [storefront, list],
+  );
+
   const open = useCallback(
-    (title: Title, rail?: Rail) => {
+    (title: Title, rail?: Rail, from?: ListFrom) => {
       const tap = rail ? (rail.tap.cards[title.id] ?? rail.tap.card) : null;
       switch (tap?.type ?? 'detail') {
         case 'none':
@@ -102,14 +153,21 @@ export function useTitleActions() {
         case 'link':
           if (tap?.target) window.open(tap.target, '_blank', 'noopener');
           return;
+        case 'page':
+          // A storefront the editor picked for the card; an address that names none: the rail's titles.
+          if (storefront(tap?.target)) return;
+          if (rail && from) list(rail, from);
+          return;
         case 'collection':
-          dispatch(showToast('Opening a full list is not available yet.'));
+          // The rail's titles in a grid. From a screen that cannot open one (a hero): the details.
+          if (rail && from) list(rail, from);
+          else detail(title);
           return;
         default:
           detail(title, tap?.presentation);
       }
     },
-    [act, detail, dispatch],
+    [act, detail, storefront, list],
   );
 
   /** A rail's "See all", as its `seeAll.tap` says: a link, nothing, a storefront (`page`, its address sent by the
@@ -147,5 +205,5 @@ export function useTitleActions() {
     [navigate, dispatch],
   );
 
-  return { open, act, seeAll };
+  return { open, act, seeAll, tile };
 }

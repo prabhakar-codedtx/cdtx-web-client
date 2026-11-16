@@ -10,7 +10,8 @@ import { CardView } from '@/render/CardView';
 import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
 import { cardSize } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
-import { collectionBlock } from '@/screens/collectionBlock';
+import { collectionBlock, collectionGrid } from '@/screens/collectionBlock';
+import { isTileRail, railForTile } from '@/lib/render/chips';
 
 /** The design of this page when the server sends none (an older server): what it sent before it did. */
 const FALLBACK: SeeAllPageDesign = {
@@ -77,7 +78,12 @@ export function SeeAllScreen() {
     let live = true;
     getPage(launch, slug, getDeliveryContext(), {}).then(
       (p) => {
-        const r = p.rails.find((x) => x.key === key);
+        const placed = p.rails.find((x) => x.key === key);
+        // Opened from a tile (`?chip=`): that tile's titles, not the rail's.
+        const chipKey = new URLSearchParams(location.search).get('chip');
+        const chip =
+          placed && chipKey && isTileRail(placed) ? placed.chips?.items.find((c) => c.key === chipKey) : null;
+        const r = placed && chip ? railForTile(placed, chip) : placed;
         if (!live) return;
         if (r)
           setFound({
@@ -93,7 +99,7 @@ export function SeeAllScreen() {
     return () => {
       live = false;
     };
-  }, [sent, launch, slug, key]);
+  }, [sent, launch, slug, key, location.search]);
 
   const url = rail?.source.contentUrl ?? null;
   const [first, setFirst] = useState(true);
@@ -187,7 +193,7 @@ export function SeeAllScreen() {
     );
 
   // The grid rail designed in the CMS for this See all (its columns, gaps, padding, title style), else the rail's own.
-  const grid = rail.seeAll.collection ?? null;
+  const grid = collectionGrid(rail);
   const rl = grid?.railLayout ?? rail.railLayout;
   const gap = rl.gap ?? 12;
   const rowGap = grid ? (rl.rowGap ?? gap) : gap;
@@ -274,7 +280,10 @@ export function SeeAllScreen() {
                   title={t}
                   width={size.w}
                   height={size.h}
-                  onOpen={(x) => open(x, rail)}
+                  // Already in the rail's list: a tap that would open it again opens the details.
+                  onOpen={(x) =>
+                    open(x, (rail.tap.cards[x.id] ?? rail.tap.card).type === 'collection' ? undefined : rail)
+                  }
                   onAction={act}
                 />
               </div>

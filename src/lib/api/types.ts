@@ -565,7 +565,8 @@ export interface Block {
 // ---- rails and page --------------------------------------------------------------------------
 
 export interface TapAction {
-  type: 'detail' | 'player' | 'collection' | 'link' | 'none' | string | null;
+  /** `page`: a storefront, its address in `target`. `collection`: the rail's titles in a grid. */
+  type: 'detail' | 'player' | 'collection' | 'page' | 'link' | 'none' | string | null;
   target: string | null;
   /** On a `detail` tap: how the details open on this device, already worked out by the server. `dialog` is an overlay; null or `fullScreen` is the page. */
   presentation?: 'fullScreen' | 'dialog' | string | null;
@@ -602,6 +603,9 @@ export interface RailChip {
   /** Its titles (never more than the rail's limit). */
   count: number | null;
   contentUrl: string;
+  /** Only when the chips are drawn as cards (`chips.display: cards`): what tapping this tile opens.
+   * `page` a storefront (`target` its address); `collection` its titles (`contentUrl`) in a grid. */
+  tap?: TapAction | null;
 }
 
 /** A chip rail's row of chips: draw them in this order and select `default` first. */
@@ -609,6 +613,12 @@ export interface RailChips {
   /** language | genre | duration | year | actor | category | custom: a hint only. */
   type: string | null;
   default: string;
+  /** `chips` (or none sent): a row of chips above the rail's cards. `cards`: the chips are the rail's
+   * cards, each a tile drawn with the rail's own card design (its label as the title, its `icon` as the
+   * picture), opening its `tap`. */
+  display?: 'chips' | 'cards' | string | null;
+  /** `cards`: the grid rail a tile's titles open in, as `seeAll.collection`. Null: the app's own grid. */
+  collection?: Rail | null;
   items: RailChip[];
 }
 
@@ -661,7 +671,14 @@ export interface Rail {
     arrowStyle?: 'circle' | 'chevron' | null;
     arrowPlacement?: 'inside' | 'outside' | null;
   } | null;
-  tap: { card: TapAction; cards: Record<string, TapAction>; elements: Record<string, string> };
+  tap: {
+    card: TapAction;
+    cards: Record<string, TapAction>;
+    elements: Record<string, string>;
+    /** The grid rail a card's `collection` tap opens the rail's titles in, as `seeAll.collection`.
+     * Null (or an older server): the app's own grid. */
+    collection?: Rail | null;
+  };
   railLayout: RailLayout;
   /** `tap`: where it goes: `collection` (or none sent) the rail's own titles, `link` its `target`, `none` nowhere. */
   seeAll: {
