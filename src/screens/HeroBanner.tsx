@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loadItems } from '@/app/pagesSlice';
 import type { Block, Fill, Rail, Title } from '@/lib/api/types';
@@ -8,6 +8,7 @@ import { imageFor, imageSrc } from '@/lib/render/fields';
 import { rgba } from '@/lib/render/paint';
 import { CardView } from '@/render/CardView';
 import { Img } from '@/render/Img';
+import { DEFAULT_CARD_VIDEO, HeroPreview } from '@/screens/HeroPreview';
 
 /**
  * The hero (`rail.layout: hero`, the page's first rail): one slide per title, drawn full width.
@@ -68,8 +69,19 @@ export function HeroBanner({
     '#000000';
   // The arrows show while the pointer is over the hero (or a button in it has focus).
   const [over, setOver] = useState(false);
+  // What starts a video layer that waits for the pointer (`onHover`) or for focus (`onFocus`, TV / keyboard).
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const round = (hl?.arrowStyle ?? 'circle') === 'circle';
   const outside = hl?.arrowPlacement === 'outside';
+  // The title's preview video (`heroLayout.previewVideo`), played as the card's video layer says
+  // (`card.video`; a card without one: the whole card). Muted unless the layer starts it with sound and the
+  // browser allows it; the sound button's choice stays for the next slide.
+  const layer = block?.card.video ?? DEFAULT_CARD_VIDEO;
+  const [muted, setMuted] = useState(() => layer.startMuted !== false);
+  const mutedByBrowser = useCallback(() => setMuted(true), []);
+  const [videoOn, setVideoOn] = useState(false);
+  const onPlayingChange = useCallback((on: boolean) => setVideoOn(on), []);
 
   useEffect(() => {
     if (url && hasTitles) void dispatch(loadItems(url));
@@ -143,6 +155,14 @@ export function HeroBanner({
   const [tw, th] = (thumbs?.thumbnailRatio ?? '').split(':').map(Number);
   const thumbRatio = tw && th ? tw / th : ratio;
   const art = hl?.backdrop === 'blur' && item ? imageFor(item, card.imageAspect) : null;
+  const previewSrc =
+    hl?.previewVideo && layer.source === 'preview' && item?.previewVideoUrl ? item.previewVideoUrl : null;
+  const armed = layer.trigger === 'onHover' ? hovered : layer.trigger === 'onFocus' ? focused : true;
+  // The card's own Sound button (an atom whose action is `toggle_sound`): drawn only while the video plays,
+  // and then the app's own corner button is not drawn.
+  const ownSoundButton = hasAction(block, SOUND_ACTION);
+  const act = (action: string, t: Title | null) =>
+    action === SOUND_ACTION ? setMuted((m) => !m) : onAction(action, t);
   const go = (step: number) => setIndex((i) => (i + step + count) % count);
   const arrow = (dir: -1 | 1): React.CSSProperties => ({
     position: 'absolute',
@@ -171,10 +191,24 @@ export function HeroBanner({
       aria-roledescription="carousel"
       aria-label={rail.title ?? undefined}
       style={{ position: 'relative', overflow: 'hidden', paddingTop: top, paddingBottom: bottom }}
-      onMouseEnter={() => setOver(true)}
-      onMouseLeave={() => setOver(false)}
-      onFocus={() => setOver(true)}
-      onBlur={() => setOver(false)}
+      onMouseEnter={() => {
+        setOver(true);
+        setHovered(true);
+      }}
+      onMouseLeave={() => {
+        setOver(false);
+        setHovered(false);
+      }}
+      onFocus={() => {
+        setOver(true);
+        setFocused(true);
+      }}
+      onBlur={(e) => {
+        // Focus moving between the hero's own buttons is still focus on the hero.
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setOver(false);
+        setFocused(false);
+      }}
     >
       {art && (
         // The slide's art, blurred and darkened, fills the space behind and beside the banner.
@@ -236,8 +270,48 @@ export function HeroBanner({
             // What the viewer sees first: fetched ahead of every other picture on the page.
             priority="high"
             onOpen={tappable ? (it) => onOpen(it, rail) : undefined}
-            onAction={onAction}
+            onAction={act}
+            hiddenActions={videoOn ? undefined : HIDDEN_WHILE_STILL}
+            video={
+              // Drawn only while its trigger holds: focus or the pointer gone takes the card back to its picture.
+              previewSrc && armed ? (
+                <HeroPreview
+                  src={previewSrc}
+                  layer={layer}
+                  onMutedByBrowser={mutedByBrowser}
+                  muted={muted}
+                  onPlayingChange={onPlayingChange}
+                />
+              ) : undefined
+            }
           />
+          {previewSrc && videoOn && !ownSoundButton && (
+            <button
+              type="button"
+              aria-label={muted ? 'Turn the sound on' : 'Turn the sound off'}
+              aria-pressed={!muted}
+              onClick={() => setMuted((m) => !m)}
+              style={{
+                position: 'absolute',
+                right: 16,
+                bottom: 16,
+                zIndex: 3,
+                width: 40,
+                height: 40,
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                border: '1px solid rgba(255,255,255,0.6)',
+                background: 'rgba(0,0,0,0.45)',
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              <Speaker muted={muted} />
+            </button>
+          )}
         </div>
       )}
       {count > 1 && (
@@ -320,6 +394,38 @@ export function HeroBanner({
         </div>
       )}
     </section>
+  );
+}
+
+/** The button action that turns the card video's sound on or off (CMS: a button's purpose "Sound on / off"). */
+const SOUND_ACTION = 'toggle_sound';
+const HIDDEN_WHILE_STILL = [SOUND_ACTION] as const;
+
+/** Whether the card design has a button that does `action`, on the card or inside one of its components. */
+function hasAction(block: Block | null, action: string): boolean {
+  if (!block) return false;
+  return (
+    block.atoms.some((a) => a.action === action) ||
+    block.components.some((c) => c.atoms.some((a) => a.action === action))
+  );
+}
+
+/** The sound button's speaker: with waves when the sound is on, crossed out when it is off. */
+function Speaker({ muted }: { muted: boolean }) {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor" />
+      {muted ? (
+        <path d="m16 9 6 6m0-6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      ) : (
+        <path
+          d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
   );
 }
 

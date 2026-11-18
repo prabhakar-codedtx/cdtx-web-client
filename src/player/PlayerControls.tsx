@@ -11,6 +11,7 @@ import type { Control, PlayerConfig, PlayerFrame } from '@/lib/api/player';
 import type { Atom, Title } from '@/lib/api/types';
 import { resolveLayout } from '@/lib/layout/resolve';
 import type { Attribute, Box, LayoutRule, Relation } from '@/lib/layout/types';
+import type { AdBreak } from '@/lib/api/ads';
 import { AtomView, type PartCtx } from '@/render/Parts';
 import { Panel } from '@/player/Panel';
 import { clock, type Media } from '@/player/useMedia';
@@ -149,6 +150,16 @@ function withPauseIcon(atom: Atom): Atom {
   };
 }
 
+/** The shape of one ad mark: a dot, a thin bar or a diamond, `size` px. */
+function markShape(shape: string, size: number): CSSProperties {
+  if (shape === 'bar') return { width: Math.max(2, Math.round(size / 3)), height: size * 1.5, borderRadius: 1 };
+  if (shape === 'diamond') {
+    const side = Math.round(size * 0.78);
+    return { width: side, height: side, borderRadius: 1, rotate: '45deg' };
+  }
+  return { width: size, height: size, borderRadius: '50%' };
+}
+
 /** The seek bar's look with its progress at `percent` (0-100): the slider layer draws the track and fill. */
 function withProgress(atom: Atom, percent: number): Atom {
   return {
@@ -165,6 +176,7 @@ function withProgress(atom: Atom, percent: number): Atom {
 export function PlayerControls({
   config,
   ad,
+  adBreaks = [],
   media,
   facts,
   title,
@@ -179,6 +191,8 @@ export function PlayerControls({
   config: PlayerConfig;
   /** An ad is playing: `ad.controls` are drawn instead of `controls`. */
   ad: boolean;
+  /** The title's ad breaks: the seek bar marks each mid-roll (when its design has marks on). */
+  adBreaks?: AdBreak[];
   media: Media;
   facts: PlayerFacts;
   title: Title | null;
@@ -550,6 +564,14 @@ export function PlayerControls({
       // is invisible and takes the pointer, the keyboard and the remote.
       const drawn = c.look?.style.layers.some((l) => l.type === 'slider' && l.slider);
       const percent = media.duration ? (Math.min(media.time, media.duration) / media.duration) * 100 : 0;
+      // A mark at each mid-roll, when the design has marks on and the control lets them show.
+      const marks = c.look?.style.layers.find((l) => l.type === 'slider')?.slider?.markers ?? null;
+      const spots =
+        marks && marks.source === 'adBreaks' && c.config?.showMarkers !== false && media.duration > 0
+          ? adBreaks
+              .filter((x) => x.position === 'midroll' && x.offsetSeconds !== null && x.offsetSeconds < media.duration)
+              .map((x) => ((x.offsetSeconds as number) / media.duration) * 100)
+          : [];
       return (
         <span style={{ position: 'relative', display: 'block', width: '100%', height: '100%' }}>
           {drawn && c.look && (
@@ -560,6 +582,23 @@ export function PlayerControls({
               style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
             />
           )}
+          {marks &&
+            spots.map((pct) => (
+              <span
+                key={pct}
+                data-ad-marker={pct < percent ? 'played' : 'ahead'}
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: `${pct}%`,
+                  translate: '-50% -50%',
+                  pointerEvents: 'none',
+                  background: pct < percent ? (marks.playedColor ?? '#8230c6') : (marks.color ?? '#ffcc00'),
+                  ...markShape(marks.shape, (marks.size ?? 8) * k),
+                }}
+              />
+            ))}
           <input
             type="range"
             data-focus

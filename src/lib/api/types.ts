@@ -348,6 +348,14 @@ export interface Slider {
   height: number | null;
   minWidth: number | null;
   cornerRadius: number | null;
+  /** Marks the bar draws at the title's ad breaks (`source: adBreaks`); absent when the atom has none. */
+  markers?: {
+    source: string;
+    shape: 'dot' | 'bar' | 'diamond' | string;
+    size: number | null;
+    color: string | null;
+    playedColor: string | null;
+  } | null;
 }
 
 /** One layer of a box atom, in drawing order. */
@@ -498,6 +506,28 @@ export interface Component {
   layoutRules: Rule[];
 }
 
+/**
+ * A card's video layer: which video (`preview` = the title's `previewVideoUrl`), where (`card`, or the
+ * inner image's box `inset`; `left` / `top` / `width` / `height` in designed px from the card's top-left),
+ * what starts it, the seconds the picture shows first, the fade over the picture (ms), its end, whether it
+ * starts muted, and where it sits among the card's layers (`zIndex`, on `stack`'s scale).
+ */
+export interface CardVideo {
+  source: 'preview' | string;
+  area: 'card' | 'inset' | string;
+  left: number | null;
+  top: number | null;
+  width: number | null;
+  height: number | null;
+  shapePolygon: Point[];
+  trigger: 'onScreen' | 'onFocus' | 'onHover' | string;
+  delaySec: number;
+  fadeMs: number;
+  end: 'loop' | 'showThumbnail' | 'stop' | string;
+  startMuted: boolean;
+  zIndex: number;
+}
+
 export interface Card {
   /** The designed size: what `contentFit` and a `designed` rail draw at. */
   width: number | null;
@@ -529,6 +559,8 @@ export interface Card {
         shapePolygon: Point[];
       })
     | null;
+  /** The video layer (CMS: Component builder → Video); null: the card has none. */
+  video?: CardVideo | null;
   /** Drawn over the picture, in order. */
   shade: Gradient[];
   border: Stroke | null;
@@ -676,6 +708,8 @@ export interface Rail {
     backdropDim?: number | null;
     arrowStyle?: 'circle' | 'chevron' | null;
     arrowPlacement?: 'inside' | 'outside' | null;
+    /** Play the title's `previewVideoUrl`, as the card's video layer (`card.video`) says. */
+    previewVideo?: boolean;
   } | null;
   tap: {
     card: TapAction;

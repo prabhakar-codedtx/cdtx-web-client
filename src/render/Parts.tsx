@@ -28,6 +28,8 @@ export interface PartCtx {
   onResize?: () => void;
   /** How soon the card's pictures load (`Img`): lazy unless the card is on screen when the page opens. */
   priority?: ImgPriority;
+  /** Buttons whose action has nothing to do right now (a Sound button while no video plays): not drawn. */
+  hiddenActions?: readonly string[];
 }
 
 const FLEX: Record<string, string> = {
@@ -517,6 +519,7 @@ export function AtomView({
   style?: CSSProperties;
 }) {
   if (!shown(atom, ctx.title)) return null;
+  if (atom.action && ctx.hiddenActions?.includes(atom.action)) return null;
   switch (atom.type) {
     case 'text':
       return <TextPart atom={atom} ctx={ctx} style={style} />;

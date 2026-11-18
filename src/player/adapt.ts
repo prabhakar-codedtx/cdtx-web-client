@@ -156,6 +156,16 @@ function layer(l: Json, look: Json): Layer {
         height: num(l.height),
         minWidth: num(l.minWidth),
         cornerRadius: num(l.cornerRadius),
+        markers:
+          l.markers && typeof l.markers === 'object'
+            ? {
+                source: str((l.markers as Json).source) ?? 'adBreaks',
+                shape: str((l.markers as Json).shape) ?? 'dot',
+                size: num((l.markers as Json).size),
+                color: str((l.markers as Json).color),
+                playedColor: str((l.markers as Json).playedColor),
+              }
+            : null,
       },
     };
   }
