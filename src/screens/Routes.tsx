@@ -1,10 +1,12 @@
-import { useEffect } from 'react';
+import { useContext, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loadPage, pageKey } from '@/app/pagesSlice';
 import { DETAIL_SCREEN } from '@/lib/api/endpoints';
+import { DialogRoomContext } from '@/lib/device/dialogContext';
 import { useDt } from '@/lib/device/useDt';
 import { PageScreen } from '@/screens/PageScreen';
+import { defaultShown, useShowNav } from '@/screens/navVisibility';
 
 /** A screen by its slug (and the title it is opened for, on a detail screen). */
 function Screen({ slug, contentId, type }: { slug: string | undefined; contentId?: string; type?: string }) {
@@ -12,6 +14,11 @@ function Screen({ slug, contentId, type }: { slug: string | undefined; contentId
   const dt = useDt();
   const entry = useAppSelector((s) => (slug ? s.pages.pages[pageKey(slug, contentId, dt)] : undefined));
   const viewerVersion = useAppSelector((s) => s.pages.viewerVersion);
+  const navStyle = useAppSelector((s) => s.launch.navStyle);
+  // The tab bar on this screen, as the CMS decided (`nav.show`); until the page arrives, a storefront keeps
+  // it and a detail page follows the Navigation default. Inside the details dialog the screen behind decides.
+  const inDialog = useContext(DialogRoomContext) !== null;
+  useShowNav(entry?.data?.nav?.show ?? (contentId ? defaultShown(navStyle, 'detail') : true), !inDialog);
 
   // Asked for again on every visit (what was published since reaches the next one), and when the
   // viewer's progress was saved (Continue Watching's count may have changed).

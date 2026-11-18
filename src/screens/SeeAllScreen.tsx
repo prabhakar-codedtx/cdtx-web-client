@@ -8,6 +8,7 @@ import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { CardView } from '@/render/CardView';
 import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
+import { defaultShown, useNavShown, useShowNav } from '@/screens/navVisibility';
 import { cardSize } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
 import { collectionBlock, collectionGrid } from '@/screens/collectionBlock';
@@ -45,9 +46,11 @@ export function SeeAllScreen() {
   const navigate = useNavigate();
   const launch = useAppSelector((s) => s.launch.launch);
   const navStyle = useAppSelector((s) => s.launch.navStyle);
-  const topRoom = navTopRoom(navStyle);
+  const navShown = useNavShown();
+  // No tab bar here (the CMS hid it on this grid): no room is kept for it.
+  const topRoom = navShown ? navTopRoom(navStyle) : 0;
   // A sidebar stacked on the screen: the list starts after its closed width (the background runs under it).
-  const leftInset = navLeftInset(navStyle);
+  const leftInset = navShown ? navLeftInset(navStyle) : 0;
   const { open, act } = useTitleActions();
   const sent = location.state as {
     rail?: Rail;
@@ -71,6 +74,8 @@ export function SeeAllScreen() {
   const block = sent?.rail ? (sent.block ?? null) : (found?.block ?? null);
   const background = sent?.rail ? (sent.pageBackground ?? null) : (found?.background ?? null);
   const d = (sent?.rail ? sent.design : found?.design) ?? FALLBACK;
+  // The tab bar on this grid: as the rail that opened it says (`gridNav`), else the Navigation default.
+  useShowNav(rail?.gridNav?.show ?? defaultShown(navStyle, 'grid'));
 
   // Opened without the tap (a link, a reload): the rail is read from its page.
   useEffect(() => {

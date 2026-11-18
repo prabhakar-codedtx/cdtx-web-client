@@ -10,6 +10,7 @@ import { demoOn, useDemoMedia } from '@/player/demo';
 import { useMedia } from '@/player/useMedia';
 import { useTitlePlayback } from '@/player/useTitlePlayback';
 import { usePlayerConfig } from '@/player/usePlayerConfig';
+import { useShowNav } from '@/screens/navVisibility';
 
 /**
  * `/play/:type/:id`: the video player for a title. The controls span the whole window and are the
@@ -28,6 +29,8 @@ export function PlayerScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  // The player fills the screen: never the tab bar over it.
+  useShowNav(false);
   const arrived = location.state as { title?: Title | null; autoplay?: boolean } | null;
   const fromState = arrived?.title ?? null;
   // Opened from a link or a reload: the title, if a rail has already brought it.
