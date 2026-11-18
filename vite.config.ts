@@ -18,6 +18,8 @@ export default defineConfig(({ mode }) => {
     // web build can be sideloaded onto a TV without a native app release.
     VitePWA({
       registerType: 'autoUpdate',
+      // Registered from the app (`src/lib/pwa.ts`), which reloads the page when a new version takes over.
+      injectRegister: false,
       includeAssets: ['icons/icon.svg'],
       manifest: {
         id: '/',
@@ -41,6 +43,9 @@ export default defineConfig(({ mode }) => {
         ],
       },
       workbox: {
+        // A new version takes over at once, open pages included: `src/lib/pwa.ts` then reloads them.
+        skipWaiting: true,
+        clientsClaim: true,
         // Storefront layout responses change on every publish, so they get a
         // short-lived NetworkFirst cache (usable the instant a TV app is
         // reopened offline, but never trusted for long) rather than the
