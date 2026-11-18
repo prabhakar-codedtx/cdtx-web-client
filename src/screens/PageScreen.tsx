@@ -9,6 +9,7 @@ import { loadingDebug, logLoading } from '@/lib/debug/loadingLog';
 import { fillCss, paddingCss } from '@/lib/render/paint';
 import { HeroBanner } from '@/screens/HeroBanner';
 import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
+import { useNavShown } from '@/screens/navVisibility';
 import { LoadingInspector } from '@/screens/LoadingInspector';
 import { Rail } from '@/screens/Rail';
 import { useTitleActions } from '@/screens/useTitleActions';
@@ -37,7 +38,9 @@ export function PageScreen({
   const launch = useAppSelector((s) => s.launch.launch);
   const tabs = useAppSelector((s) => s.launch.tabs);
   const navStyle = useAppSelector((s) => s.launch.navStyle);
-  const topRoom = navTopRoom(navStyle);
+  const navShown = useNavShown();
+  // No tab bar on this screen (the CMS hid it): no room is kept for it.
+  const topRoom = navShown ? navTopRoom(navStyle) : 0;
   // The windows of rows asked for after the first: their rails and their card designs.
   const [more, setMore] = useState<Page[]>([]);
   // Page → Loading: how many rows (the hero not counted) may ask for their titles so far. It starts at
@@ -81,7 +84,7 @@ export function PageScreen({
   const inDialog = useContext(DialogRoomContext) !== null;
   // A sidebar stacked on the screen: the rails start after its closed width; the hero's artwork and
   // the page's background run under it. The details dialog is drawn over the sidebar: no room there.
-  const leftInset = inDialog ? 0 : navLeftInset(navStyle);
+  const leftInset = inDialog || !navShown ? 0 : navLeftInset(navStyle);
   const blocks: Record<string, Block> = Object.assign({}, page.blocks, ...more.map((p) => p.blocks));
   // What a list opened from this page (a card's or a tile's `collection` tap) is drawn with.
   const listFrom = { blocks, slug: page.slug, background: page.background, design: page.seeAllPage ?? null };

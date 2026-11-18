@@ -132,6 +132,9 @@ export interface NavBarStyle {
   animationMs?: number;
   /** A stacked sidebar's shade: its colour, its stops open (a share of the screen's width) and closed (px). */
   fade?: NavFade | null;
+  /** Whether the bar is drawn on a title's detail page and on a grid, when that page or the rail that
+   * opens the grid does not say (Design System -> Navigation -> Where the bar shows). Absent: drawn. */
+  showOn?: { detail: boolean; grid: boolean };
   /** A tab's corners, px. */
   itemRadius?: number;
   dividerColor?: string | null;
@@ -625,6 +628,9 @@ export interface RailChips {
 export interface Rail {
   /** This placement on the page. */
   key: string;
+  /** Whether the tab bar is drawn on the grid this rail opens (its See all, or a card's collection), as
+   * the CMS decided for this device. Absent (an older server): the Navigation default. */
+  gridNav?: { show: boolean };
   railId: string | null;
   title: string | null;
   layout: 'hero' | 'carousel' | 'banner' | 'grid' | string | null;
@@ -747,6 +753,9 @@ export interface Page {
   paging: { start: number | null; rows: number | null; total: number | null; nextStart: number | null };
   /** The page a rail's "See all" opens. Absent on an older server: the client's own default is used. */
   seeAllPage?: SeeAllPageDesign;
+  /** Whether the tab bar is drawn on this page, as the CMS decided for this device (Page Builder ->
+   * Sidebar). Hidden: the page takes the whole screen and has a Back button. Absent: drawn. */
+  nav?: { show: boolean };
   /** How to load the rails' titles bit by bit on this device (Page → Loading in the CMS). Absent on an
    * older server: each rail loads its titles when it comes near the screen. */
   loading?: PageLoading;

@@ -4,6 +4,7 @@ import { useAppSelector } from '@/app/hooks';
 import { path } from '@/lib/api/endpoints';
 import { PRODUCT } from '@/lib/config';
 import { NAV_HEIGHT } from '@/screens/navMetrics';
+import { useNavShown } from '@/screens/navVisibility';
 import { StyledNav } from '@/screens/StyledNav';
 
 /**
@@ -45,6 +46,9 @@ export function TopNav() {
   const style = useAppSelector((s) => s.launch.navStyle);
   const tabs = useAppSelector((s) => s.launch.tabs);
   const raw = useAppSelector((s) => s.launch.launch?.raw);
+  const shown = useNavShown();
+  // The CMS hid the bar on this screen: only a way back.
+  if (!shown) return <HiddenNavBack />;
   if (style) {
     return (
       <StyledNav
@@ -57,6 +61,47 @@ export function TopNav() {
     );
   }
   return <ClientNav />;
+}
+
+/**
+ * Where the CMS hid the tab bar (a storefront or a detail page set to Hide): the screen fills the window
+ * and keeps one Back button in its corner, when there is somewhere to go back to in the app. A grid and the
+ * player draw their own Back.
+ */
+function HiddenNavBack() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const ownBack = location.pathname.startsWith('/list/') || location.pathname.startsWith('/play/');
+  // `default`: the app was opened at this address; there is nothing of it to go back to.
+  if (ownBack || location.key === 'default') return null;
+  const look = {
+    position: 'fixed',
+    top: 12,
+    left: 16,
+    zIndex: 5,
+    // Over the page's own picture: a dark disc that reads on any hero.
+    '--nav-raised': 'rgba(0,0,0,0.5)',
+    '--nav-text': '#ffffff',
+    '--nav-primary': '#ffffff',
+  } as React.CSSProperties;
+  return (
+    <button type="button" className="nav-back" aria-label="Back" onClick={() => navigate(-1)} style={look}>
+      <style>{CSS}</style>
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+    </button>
+  );
 }
 
 /** The client's own tab bar, for a server that sends no design. */
