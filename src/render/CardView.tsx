@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react';
 import styled, { keyframes } from 'styled-components';
 import type { Atom, Block, Card, Component, Frame, LayoutItem, Rule, Title } from '@/lib/api/types';
@@ -270,6 +271,14 @@ export interface CardViewProps {
   priority?: ImgPriority;
   /** A rail's header or footer: drawn with no title. */
   standalone?: boolean;
+  /**
+   * The card's video (its preview), drawn as the card's video layer says (`card.video`: its box and its
+   * `zIndex` among the card's layers, by default the whole card over the pictures and under the shade),
+   * so the text and buttons stay readable over it.
+   */
+  video?: ReactNode;
+  /** Buttons whose action has nothing to do right now (a Sound button while no video plays): not drawn. */
+  hiddenActions?: readonly string[];
 }
 
 interface Placed {
@@ -290,12 +299,14 @@ export function CardView({
   onAction,
   priority,
   standalone,
+  video,
+  hiddenActions,
 }: CardViewProps) {
   const card = block.card;
   const fit = fitOf({ width: W, height: H }, card);
   const resolveAgain = useRef<() => void>(() => {});
   const onResize = useCallback(() => resolveAgain.current(), []);
-  const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction, onResize, priority };
+  const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction, onResize, priority, hiddenActions };
   // The designed card at the size it is drawn: what a fixed or minimum box is a fraction of.
   const designed = { w: (card.width ?? W) * fit, h: (card.height ?? H) * fit };
   const rootRef = useRef<HTMLDivElement>(null);
@@ -331,7 +342,9 @@ export function CardView({
     boxes: Record<string, Box>;
     naturals: Record<string, { w: number; h: number }>;
   } | null>(null);
-  const ruleKey = `${block.id}|${W}|${H}|${fit}|${title?.id ?? ''}|${rules.length}`;
+  // A button hidden or shown again (`hiddenActions`: the Sound button once the video plays) changes
+  // a part's size: measure and solve again, or the part keeps the box it had with nothing in it.
+  const ruleKey = `${block.id}|${W}|${H}|${fit}|${title?.id ?? ''}|${rules.length}|${hiddenActions?.join(',') ?? ''}`;
   const lastKey = useRef(ruleKey);
   // A part grew or shrank (a description was opened): measure every part again and solve the rules.
   useLayoutEffect(() => {
@@ -489,6 +502,28 @@ export function CardView({
               zIndex: z('insetImage'),
             }}
           />
+        )}
+        {video && (
+          // The video layer: its box (the whole card, or the inner image's) and its place among the layers.
+          <div
+            style={{
+              position: 'absolute',
+              pointerEvents: 'none',
+              overflow: 'hidden',
+              zIndex: card.video?.zIndex ?? 25,
+              ...(card.video?.area === 'inset' && card.video.width !== null && card.video.height !== null
+                ? {
+                    left: (card.video.left ?? 0) * fit,
+                    top: (card.video.top ?? 0) * fit,
+                    width: card.video.width * fit,
+                    height: card.video.height * fit,
+                    clipPath: polygonCss(card.video.shapePolygon),
+                  }
+                : { inset: 0 }),
+            }}
+          >
+            {video}
+          </div>
         )}
         {card.shade.map((g, i) => (
           <div key={i} style={layer('shade', { backgroundImage: gradientCss(g) })} />

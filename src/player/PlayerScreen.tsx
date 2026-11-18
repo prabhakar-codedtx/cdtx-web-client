@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { showToast } from '@/app/uiSlice';
@@ -7,7 +7,9 @@ import { useElementWidth, useViewportHeight } from '@/lib/device/useElementWidth
 import { imageFor } from '@/lib/render/fields';
 import { PlayerControls, type PlayerFacts } from '@/player/PlayerControls';
 import { demoOn, useDemoMedia } from '@/player/demo';
+import { attachSource } from '@/player/hls';
 import { useMedia } from '@/player/useMedia';
+import { useAds } from '@/player/useAds';
 import { useTitlePlayback } from '@/player/useTitlePlayback';
 import { usePlayerConfig } from '@/player/usePlayerConfig';
 import { useShowNav } from '@/screens/navVisibility';
@@ -18,8 +20,9 @@ import { useShowNav } from '@/screens/navVisibility';
  * as `surface.fit` says (`cover`: the whole window, edges cropped; `contain`, or unset: all of it, with
  * bars where the shapes differ). With no published layout the browser's own player is shown.
  *
- * The delivery API has no stream address yet, so the stream is the title's `previewVideoUrl` when it
- * has one; without it the title's picture stands in and the controls drive an empty player.
+ * The stream is the title's playback address (its quality or audio language), else its `previewVideoUrl`;
+ * without either the title's picture stands in and the controls drive an empty player. MP4 or HLS
+ * (`.m3u8`, through hls.js: `attachSource`).
  */
 /** Next episode is offered in the last this-many seconds; when the video ends the next one starts. */
 const UP_NEXT_SECONDS = 20;
@@ -56,7 +59,8 @@ export function PlayerScreen() {
   const demo = demoOn(id) && !offer.ready;
   const sample = useDemoMedia(own, demo, say);
   const media = useMemo(() => (offer.ready ? offer.extend(own) : sample), [offer, own, sample]);
-  const [ad] = useState(false);
+  const [adVideo, setAdVideo] = useState<HTMLVideoElement | null>(null);
+  const adMedia = useMedia(adVideo, null);
 
   // The controls span the whole window (their positions are fractions of it); the video keeps its own
   // shape inside (`object-fit: contain`), so a window wider than 16:9 letterboxes the picture only.
@@ -93,8 +97,21 @@ export function PlayerScreen() {
     [dispatch],
   );
 
-  const src = offer.ready ? offer.src : (title?.previewVideoUrl ?? undefined);
+  // Development only (`npm run dev`): `?video=<address>` plays that file for a title with no stream of its own,
+  // so the player and its ads can be tried. A production build has no such override.
+  const trial = import.meta.env.DEV ? new URLSearchParams(location.search).get('video') : null;
+  const src = trial ?? (offer.ready ? offer.src : (title?.previewVideoUrl ?? undefined));
   const poster = imageFor(title, '0-16x9') ?? undefined;
+  // The stream into the `<video>`: an MP4 as it is, an HLS stream (`.m3u8`) through hls.js, with a
+  // signed stream's signature on every piece. A new quality or language swaps it; where it was carries
+  // on (`useTitlePlayback`, on the new stream's `loadedmetadata`).
+  useEffect(() => {
+    if (!video || !src) return;
+    return attachSource(video, src, { onFail: () => say('This video cannot be played.') });
+  }, [video, src, say]);
+  // The title's ad breaks (pre-roll, mid-rolls, post-roll): an ad plays in its own video over this one.
+  const ads = useAds(id, video, Boolean(src));
+  const ad = ads.ad;
 
   return (
     <main
@@ -139,7 +156,6 @@ export function PlayerScreen() {
               // `autoPlay` applies) even when it has the same stream address as the one that ended.
               key={id}
               ref={setVideo}
-              src={src}
               poster={poster}
               // Opened by Next episode (pressed, or the last one ended): it plays straight away.
               autoPlay={Boolean(arrived?.autoplay)}
@@ -216,18 +232,78 @@ export function PlayerScreen() {
                 {own.failed}
               </div>
             )}
+            {ad && (
+              <video
+                // One element per ad: it starts from its own beginning.
+                key={ad.src}
+                ref={(el) => {
+                  setAdVideo(el);
+                  // The title's volume carries over; a browser that will not start it with sound starts it muted.
+                  if (el && video && el.dataset.started !== '1') {
+                    el.dataset.started = '1';
+                    el.volume = video.volume;
+                    el.muted = video.muted;
+                    void el.play().catch(() => {
+                      el.muted = true;
+                      void el.play().catch(() => ads.finish('error'));
+                    });
+                  }
+                }}
+                src={ad.src}
+                playsInline
+                onTimeUpdate={(e) => ad.onTime(e.currentTarget.currentTime, e.currentTarget.duration)}
+                onVolumeChange={(e) => ad.onMute(e.currentTarget.muted)}
+                onEnded={() => ads.finish('complete')}
+                onError={() => ads.finish('error')}
+                onClick={ad.clickThrough ? ad.onClick : undefined}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  background: '#000',
+                  cursor: ad.clickThrough ? 'pointer' : undefined,
+                }}
+              />
+            )}
+            {ad && ad.skipAfter !== null && (
+              <button
+                type="button"
+                disabled={adMedia.time < ad.skipAfter}
+                onClick={() => ads.finish('skip')}
+                style={{
+                  position: 'absolute',
+                  right: 32,
+                  bottom: 120,
+                  zIndex: 25,
+                  padding: '10px 18px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.6)',
+                  background: 'rgba(0,0,0,0.7)',
+                  color: '#fff',
+                  fontSize: 14,
+                  cursor: adMedia.time < ad.skipAfter ? 'default' : 'pointer',
+                }}
+              >
+                {adMedia.time < ad.skipAfter
+                  ? `Skip ad in ${Math.ceil(ad.skipAfter - adMedia.time)}s`
+                  : 'Skip ad'}
+              </button>
+            )}
             {config && W > 0 && (
               <PlayerControls
                 config={config}
-                ad={ad}
-                media={media}
+                ad={Boolean(ad)}
+                adBreaks={ads.breaks}
+                media={ad ? adMedia : media}
                 facts={facts}
                 title={title}
                 width={W}
                 height={H}
                 surfaceRef={surfaceRef}
                 stageRef={wrapRef}
-                video={video}
+                video={ad ? adVideo : video}
                 onBack={() => navigate(-1)}
                 onUnavailable={unavailable}
               />
