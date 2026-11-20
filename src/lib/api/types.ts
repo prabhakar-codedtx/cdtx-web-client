@@ -399,8 +399,10 @@ export interface MetaStyle {
   listSeparator: string | null;
   gap: number | null;
   fieldColors: Record<string, string>;
-  fieldModes: Record<string, 'list' | 'count' | 'first' | string>;
-  fieldDisplays: Record<string, 'text' | 'badge' | string>;
+  fieldModes: Record<string, 'list' | 'count' | 'first' | 'more' | string>;
+  fieldDisplays: Record<string, 'text' | 'badge' | 'tag' | string>;
+  /** The colour of the words inside a `badge` or `tag` (`fieldColors` is its fill). Absent when none is set. */
+  fieldTextColors?: Record<string, string>;
 }
 
 export interface ImageStyle extends Image {
@@ -557,6 +559,8 @@ export interface Card {
         width: number | null;
         height: number | null;
         shapePolygon: Point[];
+        /** The picture's own corner radii in design px; absent: square. */
+        cornerRadius?: { topLeft: number | null; topRight: number | null; bottomRight: number | null; bottomLeft: number | null } | null;
       })
     | null;
   /** The video layer (CMS: Component builder → Video); null: the card has none. */
@@ -760,6 +764,8 @@ export interface Rail {
   };
   /** A chip rail (`source.type: filtered`): its chips. Absent on any other rail; then `source` is used. */
   chips?: RailChips | null;
+  /** How the rail's cards move when hovered or focused (web). Only `popup` is drawn by this client. */
+  motion?: RailMotion | null;
 }
 
 export interface Page {
@@ -837,4 +843,41 @@ export interface SeeAllPageDesign {
     paddingY: number;
     marginTop: number;
   };
+}
+
+/** A card drawn over the page while the pointer rests on one of a rail's cards (web): the title's own card, built
+ * from `blocks[blockKey]`. `width` / `height` are design px, drawn times the rail card's scale (drawn card width /
+ * the rail's card design width); with no `height` it follows the design's shape. */
+export interface RailPopup {
+  blockKey: string;
+  width: number;
+  height?: number | null;
+  anchor: 'over' | 'start';
+  vertical: 'center' | 'top' | 'grow';
+  edgeFlip: boolean;
+  /** The look and the leaving, all sent by the CMS (the client decides none of it). */
+  shadow?: { y: number; blur: number; color: string } | null;
+  radius?: number | null;
+  background?: string | null;
+  /** The card's picture and the content cross-fade this long; absent: as long as it grows. */
+  fadeMs?: number | null;
+  contentDelayMs?: number | null;
+  /** `instant`: removed at once. `reverse`: plays the opening backwards over `timing.exitDurationMs`. */
+  exit?: 'instant' | 'reverse' | string | null;
+  /** How long the pointer may be off both the card and the pop-up before it closes. */
+  leaveGraceMs?: number | null;
+  /** The cross-fade's cubic-bezier points. */
+  fadeEasing?: number[] | null;
+  /** Stacking order above the page. */
+  layer?: number | null;
+  /** `true`: radius and shadow are drawn times the card scale, like `width`; else screen px. */
+  scaleLook?: boolean | null;
+}
+
+export interface RailMotion {
+  triggers?: string[];
+  dwellMs?: number | null;
+  timing?: { durationMs?: number | null; exitDurationMs?: number | null; easing?: number[] | null } | null;
+  reducedMotion?: 'none' | 'fade' | 'full' | string | null;
+  popup?: RailPopup | null;
 }
