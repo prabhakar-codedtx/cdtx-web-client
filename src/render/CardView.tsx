@@ -545,6 +545,14 @@ export function CardView({
               height: inset.height !== null ? inset.height * fit : undefined,
               ...objectFitCss(inset),
               clipPath: polygonCss(inset.shapePolygon),
+              ...(inset.cornerRadius
+                ? {
+                    borderTopLeftRadius: (inset.cornerRadius.topLeft ?? 0) * fit,
+                    borderTopRightRadius: (inset.cornerRadius.topRight ?? 0) * fit,
+                    borderBottomRightRadius: (inset.cornerRadius.bottomRight ?? 0) * fit,
+                    borderBottomLeftRadius: (inset.cornerRadius.bottomLeft ?? 0) * fit,
+                  }
+                : {}),
               zIndex: z('insetImage'),
             }}
           />

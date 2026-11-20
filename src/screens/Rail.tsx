@@ -22,6 +22,9 @@ import { useElementWidth } from '@/lib/device/useElementWidth';
 import { useInView } from '@/lib/device/useInView';
 import { logLoading } from '@/lib/debug/loadingLog';
 import { CardView } from '@/render/CardView';
+import { CardPopup } from './CardPopup';
+import { FOCUSABLE, canHover } from './cardPopupGeometry';
+import { warmPopupPictures } from './popupPreload';
 import { AtomView, type PartCtx } from '@/render/Parts';
 import { fillCss, paddingCss, textCss } from '@/lib/render/paint';
 import { isTileRail, railForChip, shownChip, tileKey, tileTitle } from '@/lib/render/chips';
@@ -347,6 +350,55 @@ export function Rail({
   // already there stay on screen until the new ones come. Any other rail is asked once, when near.
   const viewer = isViewerRail(rail);
   const refreshed = useRef(false);
+  // The pop-up (below): the card it is open on. Hooks stay above every early return.
+  const [pop, setPop] = useState<{ i: number; el: HTMLElement; closing?: boolean } | null>(null);
+  const goneTimer = useRef<number | undefined>(undefined);
+  const popTimer = useRef<number | undefined>(undefined);
+  // How it leaves is the rail's JSON: `reverse` plays the opening backwards over the exit time, anything else removes it at once.
+  const exitMs = rail.motion?.popup?.exit === 'reverse' ? Math.max(0, rail.motion?.timing?.exitDurationMs ?? 0) : 0;
+  const closePopup = useCallback(
+    (focus?: boolean | 'next') => {
+      window.clearTimeout(popTimer.current);
+      setPop((cur) => {
+        if (!cur) return null;
+        if (focus) {
+          // The card's wrapper takes no place in the row, so the next card is its next sibling's card.
+          const target = focus === 'next' ? (cur.el.parentElement?.nextElementSibling?.firstElementChild ?? null) : cur.el;
+          window.setTimeout(() => (target as HTMLElement | null)?.focus?.(), 0);
+        }
+        if (!exitMs) return null;
+        if (cur.closing) return cur;
+        window.clearTimeout(goneTimer.current);
+        goneTimer.current = window.setTimeout(() => setPop((p) => (p?.closing ? null : p)), exitMs + 40);
+        return { ...cur, closing: true };
+      });
+    },
+    [exitMs],
+  );
+  useEffect(
+    () => () => {
+      window.clearTimeout(popTimer.current);
+      window.clearTimeout(goneTimer.current);
+    },
+    [],
+  );
+  // The pop-up's pictures are asked for once the rail's titles are here, so none waits for the hover.
+  const warmDesign = rail.motion?.popup ? (blocks[rail.motion.popup.blockKey] ?? null) : null;
+  const warmTitles = entry?.status === 'ready' ? entry.data : null;
+  useEffect(() => {
+    if (warmDesign && warmTitles && canHover()) warmPopupPictures(warmDesign, warmTitles);
+  }, [warmDesign, warmTitles]);
+  // One pop-up on the whole page: another rail opening its own closes this one at once.
+  useEffect(() => {
+    const other = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== rail.key) {
+        window.clearTimeout(popTimer.current);
+        setPop(null);
+      }
+    };
+    window.addEventListener('card-popup-open', other);
+    return () => window.removeEventListener('card-popup-open', other);
+  }, [rail.key]);
   // No titles held: never asked, or gone since. Whenever that happens while the rail is shown, it asks
   // again (a safety net: a shown rail is never left with no titles and no call on its way).
   const missing = !entry;
@@ -482,20 +534,39 @@ export function Rail({
   // Otherwise a header or footer design spans the lane, at its own shape. One that places nothing on its
   // card (its atoms and components have no frame) has nothing to draw, so it takes no room: sized by its
   // card's shape it would be an empty box as tall as the lane is wide.
-  const spanning = (b: Block) =>
+  const spanning = (b: Block, span = lane) =>
     b.card.display === 'strip' ? (
       strip(b)
     ) : b.atoms.some((a) => a.frame) || b.components.some((c) => c.slot === 'card' && c.frame) ? (
       <CardView
         block={b}
         title={null}
-        width={lane}
-        height={b.card.width && b.card.height ? (lane * b.card.height) / b.card.width : 0}
+        width={span}
+        height={b.card.width && b.card.height ? (span * b.card.height) / b.card.width : 0}
         standalone
       />
     ) : null;
 
-  const headerNode = header ? spanning(header) : null;
+  const headerNode = header ? spanning(header, Math.max(0, lane - start - end)) : null;
+
+  // The pop-up (web): the card the pointer or focus rests on, for `dwellMs`, shows this rail's pop-up design for the
+  // same title. One at a time; leaving both the card and the pop-up closes it; nothing on the page moves.
+  const popupSpec = rail.motion?.popup ?? null;
+  const popupDesign = popupSpec ? (blocks[popupSpec.blockKey] ?? null) : null;
+  const popupOn = Boolean(popupSpec && popupDesign && rail.motion && canHover());
+  const openPopup = (i: number, el: HTMLElement | null) => {
+    if (!popupOn || !el || !items[i]) return;
+    window.clearTimeout(popTimer.current);
+    popTimer.current = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('card-popup-open', { detail: rail.key }));
+      window.clearTimeout(goneTimer.current);
+      setPop({ i, el });
+    }, Math.max(0, rail.motion?.dwellMs ?? 0));
+  };
+  const leavePopup = () => {
+    window.clearTimeout(popTimer.current);
+    popTimer.current = window.setTimeout(() => closePopup(false), Math.max(0, rail.motion?.popup?.leaveGraceMs ?? 0));
+  };
 
   // The link beside the title, as the rail's `seeAll` says, unless a header or footer design draws it.
   const sa = rail.seeAll;
@@ -556,7 +627,8 @@ export function Rail({
         ) : null}
         {available > 0 && (
           <div style={paddingCss(body)}>
-            {headerNode && <div style={{ marginBottom: headerGap }}>{headerNode}</div>}
+            {/* A header design lines up with the cards: it takes the same space at either end as they do. */}
+            {headerNode && <div style={{ marginBottom: headerGap, paddingLeft: start, paddingRight: end }}>{headerNode}</div>}
             {/* A chip rail: its chips between the title (or header design) and the cards. */}
             {!tiles && placed.chips && placed.chips.items.length > 0 && (
               <ChipRow
@@ -587,19 +659,49 @@ export function Rail({
                 paddingBottom: inset?.y ?? undefined,
               }}
             >
-              {items.map((item, i) => (
-                <CardView
-                  key={item?.id ?? `empty-${i}`}
-                  block={block}
-                  title={item}
-                  width={w}
-                  height={h}
-                  rank={i + 1}
-                  priority={i < onScreen ? 'eager' : 'lazy'}
-                  onOpen={tiles ? openTile : tappable ? (it) => onOpen(it, rail) : undefined}
-                  onAction={onAction}
-                />
-              ))}
+              {items.map((item, i) => {
+                const card = (
+                  <CardView
+                    key={item?.id ?? `empty-${i}`}
+                    block={block}
+                    title={item}
+                    width={w}
+                    height={h}
+                    rank={i + 1}
+                    priority={i < onScreen ? 'eager' : 'lazy'}
+                    onOpen={tiles ? openTile : tappable ? (it) => onOpen(it, rail) : undefined}
+                    onAction={onAction}
+                  />
+                );
+                if (!popupOn) return card;
+                // `display: contents` takes no place in the row: the wrapper only listens.
+                return (
+                  <div
+                    key={item?.id ?? `empty-${i}`}
+                    style={{ display: 'contents' }}
+                    onPointerEnter={(e) => e.pointerType === 'mouse' && openPopup(i, e.currentTarget.firstElementChild as HTMLElement)}
+                    onPointerLeave={(e) => e.pointerType === 'mouse' && leavePopup()}
+                    onFocus={(e) => openPopup(i, e.currentTarget.firstElementChild as HTMLElement)}
+                    onBlur={(e) => {
+                      // Focus moving into the pop-up keeps it open (the pop-up is outside this wrapper).
+                      const to = e.relatedTarget as HTMLElement | null;
+                      if (!to?.closest?.('[data-card-popup]')) leavePopup();
+                    }}
+                    onKeyDown={(e) => {
+                      const el = e.currentTarget.firstElementChild as HTMLElement;
+                      if (e.key === 'Tab' && !e.shiftKey && pop?.i === i && e.target === el) {
+                        const first = document.querySelector<HTMLElement>(`[data-card-popup] ${FOCUSABLE.split(', ').join(', [data-card-popup] ')}`);
+                        if (first) {
+                          e.preventDefault();
+                          first.focus();
+                        }
+                      }
+                    }}
+                  >
+                    {card}
+                  </div>
+                );
+              })}
               {/* After the last card of a row that scrolls: only once its titles are here, and not when the
                   tap goes nowhere. */}
               {scrolls &&
@@ -623,6 +725,22 @@ export function Rail({
           </div>
         )}
       </div>
+      {pop && popupOn && popupSpec && popupDesign && rail.motion && items[pop.i] && (
+        <CardPopup
+          anchor={pop.el}
+          cardDesignWidth={block?.card.width ?? 0}
+          spec={popupSpec}
+          design={popupDesign}
+          title={items[pop.i] as Title}
+          motion={rail.motion}
+          onAction={onAction}
+          onEnter={() => window.clearTimeout(popTimer.current)}
+          onLeave={leavePopup}
+          closing={pop.closing === true}
+          exitMs={exitMs}
+          onClose={closePopup}
+        />
+      )}
     </section>
   );
 }

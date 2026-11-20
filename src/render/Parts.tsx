@@ -433,9 +433,24 @@ function MetaPart({ atom, ctx, style }: { atom: Atom; ctx: PartCtx; style?: CSSP
           {i > 0 && s.display !== 'badge' && segments[i - 1]!.display !== 'badge' && meta.separator ? (
             <span aria-hidden>{meta.separator}</span>
           ) : null}
-          {/* A badge is the value on its colour; the JSON sends no other badge look. */}
+          {/* A badge is the value on its colour; a tag is the small bold chip an age rating wears (about 0.8 x the
+              text size, bold, padding 2 / 4 units, radius 2; the separator stays beside it). */}
           {s.display === 'badge' ? (
-            <span style={{ background: rgba(s.color) }}>{s.value}</span>
+            <span style={{ background: rgba(s.color), color: rgba(s.textColor) }}>{s.value}</span>
+          ) : s.display === 'tag' ? (
+            <span
+              style={{
+                background: rgba(s.color) ?? '#ffffff',
+                color: rgba(s.textColor) ?? '#191922',
+                fontSize: '0.8em',
+                fontWeight: 800,
+                padding: `${2 * k}px ${4 * k}px`,
+                borderRadius: 2 * k,
+                lineHeight: 1.2,
+              }}
+            >
+              {s.value}
+            </span>
           ) : (
             <span style={{ color: rgba(s.color) }}>{s.value}</span>
           )}

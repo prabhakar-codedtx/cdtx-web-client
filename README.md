@@ -73,3 +73,13 @@ player config, `GET /v1/player-config/{product}?dt=` (the CMS repo's `docs/playe
 - Player: the launch config has no `playerConfigURL` (the client uses the guide's address); no stream address, intro
   markers, next episode or season's episodes reach the client, so Skip Intro, Next episode and Episodes stay hidden; the
   delivered panel designs carry no roles or `repeat` marks, so panels are drawn as plain lists.
+
+## Hover pop-up (web)
+
+A rail whose `motion.popup` is set draws a card over the page while the pointer rests on one of its cards
+(`CLIENT-MOTION-GUIDE.md` 6b in the CMS repo): the pop-up design `blocks[popup.blockKey]` for the same title, `popup.width`
+(and `popup.height`) design px times the rail's card scale, placed by `anchor` / `vertical` / `edgeFlip`. It opens out of the
+card (a clip), above everything, so no card or row moves. Closed by Escape, a scroll, a resize, leaving both it and the card, or
+a button being used. A touch screen (no hover) draws none. Keyboard: focus on a card opens it, Tab goes into its buttons, Tab
+past the last goes on to the next card, Escape returns to the card. Code: `src/screens/CardPopup.tsx`,
+`src/screens/cardPopupGeometry.ts`, wired in `src/screens/Rail.tsx`.

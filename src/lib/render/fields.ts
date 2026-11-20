@@ -58,6 +58,8 @@ export interface MetaSegment {
   value: string;
   display: string;
   color?: string;
+  /** The words' colour inside a `badge` or `tag`. */
+  textColor?: string;
 }
 
 /**
@@ -74,12 +76,21 @@ export function metaSegments(meta: MetaStyle, title: Title | null): MetaSegment[
       if (raw.length === 0) value = '';
       else if (mode === 'count') value = String(raw.length);
       else if (mode === 'first') value = String(raw[0]);
+      // The first value and how many others ("Suspense + 1"); one value is written plainly.
+      else if (mode === 'more') value = raw.length > 1 ? `${String(raw[0])} + ${raw.length - 1}` : String(raw[0]);
       else value = raw.map(String).join(meta.listSeparator ?? ', ');
     } else if (key === 'durationSeconds' && typeof raw === 'number') value = duration(raw);
     else value = present(raw) ? String(raw) : '';
     if (!value) continue;
     const color = meta.fieldColors[key];
-    out.push({ key, value, display: meta.fieldDisplays[key] ?? 'text', ...(color ? { color } : {}) });
+    const textColor = meta.fieldTextColors?.[key];
+    out.push({
+      key,
+      value,
+      display: meta.fieldDisplays[key] ?? 'text',
+      ...(color ? { color } : {}),
+      ...(textColor ? { textColor } : {}),
+    });
   }
   return out;
 }
