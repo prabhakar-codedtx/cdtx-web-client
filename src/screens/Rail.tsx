@@ -733,6 +733,7 @@ export function Rail({
           design={popupDesign}
           title={items[pop.i] as Title}
           motion={rail.motion}
+          onOpen={tappable ? (it) => onOpen(it, rail) : undefined}
           onAction={onAction}
           onEnter={() => window.clearTimeout(popTimer.current)}
           onLeave={leavePopup}

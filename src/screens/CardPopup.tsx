@@ -21,6 +21,7 @@ export function CardPopup({
   design,
   title,
   motion,
+  onOpen,
   onAction,
   onEnter,
   onLeave,
@@ -36,6 +37,8 @@ export function CardPopup({
   design: Block;
   title: Title;
   motion: RailMotion;
+  /** The pop-up is the card grown: a click on it does what a click on the card does (open the title). */
+  onOpen?: (title: Title) => void;
   onAction: (action: string, title: Title | null) => void;
   onEnter: () => void;
   onLeave: () => void;
@@ -188,6 +191,14 @@ export function CardPopup({
           title={title}
           width={size.width}
           height={size.height}
+          onOpen={
+            onOpen
+              ? (t2) => {
+                  onClose(false);
+                  onOpen(t2);
+                }
+              : undefined
+          }
           onAction={(action, t2) => {
             onAction(action, t2);
             onClose(false);
