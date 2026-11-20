@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { loadItems } from '@/app/pagesSlice';
 import type { Block, Fill, Rail, Title } from '@/lib/api/types';
@@ -9,6 +9,10 @@ import { rgba } from '@/lib/render/paint';
 import { CardView } from '@/render/CardView';
 import { Img } from '@/render/Img';
 import { DEFAULT_CARD_VIDEO, HeroPreview } from '@/screens/HeroPreview';
+import { layerOf, videoAtomOf } from '@/lib/render/video';
+import { handoffStep, trailerStep, type HandoffStep, type VideoClock } from '@/player/handoff';
+import { useHandoff } from '@/player/useHandoff';
+import { playerCarryKey } from '@/player/carry';
 
 /**
  * The hero (`rail.layout: hero`, the page's first rail): one slide per title, drawn full width.
@@ -77,7 +81,14 @@ export function HeroBanner({
   // The title's preview video (`heroLayout.previewVideo`), played as the card's video layer says
   // (`card.video`; a card without one: the whole card). Muted unless the layer starts it with sound and the
   // browser allows it; the sound button's choice stays for the next slide.
-  const layer = block?.card.video ?? DEFAULT_CARD_VIDEO;
+  // A Video component placed on the card (a Video atom) plays in its own box, as its own settings say.
+  const videoAtom = videoAtomOf(block)?.atom ?? null;
+  const layer = videoAtom?.video ? layerOf(videoAtom.video) : (block?.card.video ?? DEFAULT_CARD_VIDEO);
+  // Where the playing video is (its second, its sound): what a tap on it, or the Play button, carries on from.
+  const clockRef = useRef<(() => VideoClock) | null>(null);
+  // Hands the playing video on to the title's page (set by the video while it plays).
+  const carryRef = useRef<((key?: string) => void) | null>(null);
+  const handoff = useHandoff(onAction);
   const [muted, setMuted] = useState(() => layer.startMuted !== false);
   const mutedByBrowser = useCallback(() => setMuted(true), []);
   const [videoOn, setVideoOn] = useState(false);
@@ -109,12 +120,15 @@ export function HeroBanner({
     img.src = src;
   }, [index, loaded, background, aspect]);
 
+  // Turns by itself, unless the slide's video is playing and the CMS says the carousel waits for it
+  // ("Carousel waits while it plays"): then it turns on once the video ends or stops.
+  const holding = videoOn && layer.holdCarousel !== false;
   useEffect(() => {
     const sec = hl?.autoAdvanceSec;
-    if (!rail.autoplay || !sec || count < 2) return;
+    if (!rail.autoplay || !sec || count < 2 || holding) return;
     const t = window.setInterval(() => setIndex((i) => (i + 1) % count), sec * 1000);
     return () => window.clearInterval(t);
-  }, [rail.autoplay, hl?.autoAdvanceSec, count]);
+  }, [rail.autoplay, hl?.autoAdvanceSec, count, holding]);
 
   useEffect(() => {
     if (count < 2) return;
@@ -156,13 +170,45 @@ export function HeroBanner({
   const thumbRatio = tw && th ? tw / th : ratio;
   const art = hl?.backdrop === 'blur' && item ? imageFor(item, card.imageAspect) : null;
   const previewSrc =
-    hl?.previewVideo && layer.source === 'preview' && item?.previewVideoUrl ? item.previewVideoUrl : null;
+    (hl?.previewVideo || videoAtom) && layer.source === 'preview' && item?.previewVideoUrl
+      ? item.previewVideoUrl
+      : null;
   const armed = layer.trigger === 'onHover' ? hovered : layer.trigger === 'onFocus' ? focused : true;
   // The card's own Sound button (an atom whose action is `toggle_sound`): drawn only while the video plays,
   // and then the app's own corner button is not drawn.
   const ownSoundButton = hasAction(block, SOUND_ACTION);
-  const act = (action: string, t: Title | null) =>
-    action === SOUND_ACTION ? setMuted((m) => !m) : onAction(action, t);
+  // Otherwise the app's own, in the corner the CMS picked ("App sound button"); `none`: no button.
+  const appSound = SOUND_CORNERS[layer.soundButton ?? 'bottomRight'] ?? null;
+  // Opening this title's page while its video plays: the video is handed on and plays on there (`carry.ts`).
+  // Unless the CMS turned it off for this card (`carryOn: false`): then each screen starts its own video.
+  const carries = layer.carryOn !== false;
+  const carry = () => (carries ? carryRef.current?.() : undefined);
+  // Opening the player from the playing video: it plays on over the player until the player's own stream,
+  // started at the matching second, takes over.
+  const carryToPlayer = (t: Title) => (carries ? carryRef.current?.(playerCarryKey(t.id)) : undefined);
+  // Into the player as the CMS says: the player's sound ("Player sound") and the pre-roll ("Ad before the
+  // player"). With the pre-roll played first nothing is carried on top: the ad, then the title at the
+  // matching second.
+  const toPlayer = (t: Title, step: HandoffStep): boolean => {
+    if (step?.to !== 'player') return handoff(t, step);
+    const preroll = layer.carryPreroll === 'play' ? 'play' : 'skip';
+    const muted = layer.playerSound === 'on' ? false : step.handoff.muted;
+    if (preroll === 'skip' && step.handoff.at !== null) carryToPlayer(t);
+    return handoff(t, { to: 'player', handoff: { ...step.handoff, muted, preroll } });
+  };
+  const act = (action: string, t: Title | null) => {
+    if (action === SOUND_ACTION) return setMuted((m) => !m);
+    if (action === 'detail' || action === 'more_info') carry();
+    // Play while the card's own video plays: the player carries on from it (when it is the title's own).
+    // Trailer: the trailer the card is playing carries on in the player; else the title's trailer from the start.
+    if (action === 'trailer' && t) {
+      if (toPlayer(t, trailerStep(t, clockRef.current?.() ?? null))) return;
+    }
+    if (action === 'play' && t && clockRef.current) {
+      if (toPlayer(t, handoffStep(t, layer, clockRef.current(), 'playButton'))) return;
+    }
+    onAction(action, t);
+  };
   const go = (step: number) => setIndex((i) => (i + step + count) % count);
   const arrow = (dir: -1 | 1): React.CSSProperties => ({
     position: 'absolute',
@@ -269,9 +315,18 @@ export function HeroBanner({
             height={height}
             // What the viewer sees first: fetched ahead of every other picture on the page.
             priority="high"
-            onOpen={tappable ? (it) => onOpen(it, rail) : undefined}
+            onOpen={
+              tappable
+                ? (it) => {
+                    // Only when the tap opens the title's page (not the player, a link or another page).
+                    if (((rail.tap.cards[it.id] ?? rail.tap.card).type ?? 'detail') === 'detail') carry();
+                    onOpen(it, rail);
+                  }
+                : undefined
+            }
             onAction={act}
             hiddenActions={videoOn ? undefined : HIDDEN_WHILE_STILL}
+            playing={videoOn}
             video={
               // Drawn only while its trigger holds: focus or the pointer gone takes the card back to its picture.
               previewSrc && armed ? (
@@ -281,11 +336,26 @@ export function HeroBanner({
                   onMutedByBrowser={mutedByBrowser}
                   muted={muted}
                   onPlayingChange={onPlayingChange}
+                  clockRef={clockRef}
+                  carryKey={item ? `${item.id}|${previewSrc}` : undefined}
+                  carryRef={carryRef}
+                  onCarriedIn={setMuted}
+                  // At the end, `next`: on to the next slide (one slide only: it stays on its last frame).
+                  onEnded={count > 1 ? () => go(1) : undefined}
+                  onTap={
+                    item && layer.onTap !== 'none'
+                      ? (at) => {
+                          const step = handoffStep(item, layer, at, 'tap');
+                          if (step?.to === 'detail') carry();
+                          void toPlayer(item, step);
+                        }
+                      : undefined
+                  }
                 />
               ) : undefined
             }
           />
-          {previewSrc && videoOn && !ownSoundButton && (
+          {previewSrc && videoOn && !ownSoundButton && appSound && (
             <button
               type="button"
               aria-label={muted ? 'Turn the sound on' : 'Turn the sound off'}
@@ -293,8 +363,8 @@ export function HeroBanner({
               onClick={() => setMuted((m) => !m)}
               style={{
                 position: 'absolute',
-                right: 16,
-                bottom: 16,
+                // The corner the CMS picked ("App sound button").
+                ...appSound,
                 zIndex: 3,
                 width: 40,
                 height: 40,
@@ -400,6 +470,15 @@ export function HeroBanner({
 /** The button action that turns the card video's sound on or off (CMS: a button's purpose "Sound on / off"). */
 const SOUND_ACTION = 'toggle_sound';
 const HIDDEN_WHILE_STILL = [SOUND_ACTION] as const;
+
+/** Where the app's own Sound button sits, by the CMS's "App sound button"; `none`: not drawn. */
+const SOUND_CORNERS: Record<string, React.CSSProperties | null> = {
+  bottomRight: { right: 16, bottom: 16 },
+  bottomLeft: { left: 16, bottom: 16 },
+  topRight: { right: 16, top: 16 },
+  topLeft: { left: 16, top: 16 },
+  none: null,
+};
 
 /** Whether the card design has a button that does `action`, on the card or inside one of its components. */
 function hasAction(block: Block | null, action: string): boolean {

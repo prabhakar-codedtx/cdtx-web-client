@@ -60,6 +60,8 @@ export function isDrawn(atom: Atom, title: Title | null, aspect: string | null =
   if (atom.type === 'meta') return atom.style.meta ? metaSegments(atom.style.meta, title).length > 0 : false;
   // A picture is looked up in the card's own shape (`imageAspect`), as it is when drawn.
   if (atom.type === 'image') return Boolean(imageOf(atom, title, aspect));
+  // A Video atom: its poster, else (a title with a video and no picture) the box the video plays in.
+  if (atom.type === 'video') return Boolean(imageOf(atom, title, aspect) || title?.previewVideoUrl);
   if (atom.type === 'box') {
     // A box that only shows title fields (a Year, a Language, a Genre) has nothing to draw when the
     // title has none of them; one with an icon, a bar or fixed words always draws.
@@ -528,6 +530,8 @@ export function AtomView({
     case 'meta':
       return <MetaPart atom={atom} ctx={ctx} style={style} />;
     case 'image':
+    case 'video':
+      // A Video atom draws its poster here; the card plays the video over it (`CardView`).
       return <ImagePart atom={atom} ctx={ctx} fillFrame={inFrame && atom.frame?.w != null} style={style} />;
     default:
       // An unknown kind: draw nothing.

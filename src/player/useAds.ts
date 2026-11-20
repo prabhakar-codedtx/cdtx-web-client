@@ -38,7 +38,14 @@ function resumeAt(el: HTMLVideoElement, time: number, play: boolean) {
  *
  * `video` is the title's element; it needs a stream (`hasStream`), so a title with no video has no ads.
  */
-export function useAds(contentId: string | undefined, video: HTMLVideoElement | null, hasStream: boolean): Ads {
+export function useAds(
+  contentId: string | undefined,
+  video: HTMLVideoElement | null,
+  hasStream: boolean,
+  /** Carrying on from a card's video at `carryFrom` seconds: no pre-roll, and the mid-rolls before that
+   * second count as played (the viewer was already watching; jumping there is not a seek past them). */
+  opts?: { carryFrom: number },
+): Ads {
   const [loaded, setLoaded] = useState<{ id: string; breaks: AdBreak[] } | null>(null);
   const [onScreen, setOnScreen] = useState<{ id: string; ad: AdOnScreen } | null>(null);
   // Which breaks have played (by index): each plays once per visit, and a seek past a mid-roll plays it once.
@@ -48,6 +55,7 @@ export function useAds(contentId: string | undefined, video: HTMLVideoElement | 
   const current = useRef<{ vast: VastAd; quartiles: Set<string>; started: boolean; muted: boolean } | null>(null);
 
   const breaks = loaded && loaded.id === contentId ? loaded.breaks : EMPTY;
+  const carryFrom = opts?.carryFrom ?? null;
   const ad = onScreen && onScreen.id === contentId ? onScreen.ad : null;
 
   useEffect(() => {
@@ -58,11 +66,20 @@ export function useAds(contentId: string | undefined, video: HTMLVideoElement | 
     if (!contentId) return;
     let live = true;
     void getAds(contentId).then((b) => {
-      if (live) setLoaded({ id: contentId, breaks: b });
+      if (!live) return;
+      if (carryFrom !== null) {
+        b.forEach((brk, i) => {
+          const before = brk.position === 'midroll' && brk.offsetSeconds !== null && brk.offsetSeconds <= carryFrom;
+          if (brk.position === 'preroll' || before) played.current.add(i);
+        });
+      }
+      setLoaded({ id: contentId, breaks: b });
     });
     return () => {
       live = false;
     };
+    // The carried second is the one the player opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentId]);
 
   const finish = useCallback<Ads['finish']>(

@@ -47,6 +47,9 @@ export function useTitlePlayback(
   id: string | undefined,
   video: HTMLVideoElement | null,
   say: (text: string) => void,
+  /** Carried on from a card's video: where to start (over the viewer's Continue watching point, which
+   * `null` keeps), and `keepProgress: false` while it plays the card's trailer, not the title. */
+  carry: { startAt: number | null; keepProgress: boolean } = { startAt: null, keepProgress: true },
 ): TitlePlayback {
   const dt = useDt();
   const navigate = useNavigate();
@@ -120,7 +123,7 @@ export function useTitlePlayback(
   // Where the viewer stopped last time (`resumeSeconds`, from the server): the first stream starts there.
   const resumedFor = useRef<string | null>(null);
   useEffect(() => {
-    const at = title?.resumeSeconds;
+    const at = carry.startAt ?? title?.resumeSeconds;
     if (!video || !id || !at || resumedFor.current === id) return;
     const seek = () => {
       if (resumedFor.current === id) return;
@@ -134,11 +137,12 @@ export function useTitlePlayback(
       window.clearTimeout(soon);
       video.removeEventListener('loadedmetadata', seek);
     };
-  }, [video, id, title?.resumeSeconds]);
+  }, [video, id, title?.resumeSeconds, carry.startAt]);
 
   // How far the viewer got, for Continue Watching: every 10 s while playing, on pause, and on leaving.
+  const keepProgress = carry.keepProgress;
   useEffect(() => {
-    if (!video || !id) return;
+    if (!video || !id || !keepProgress) return;
     const report = () => {
       if (video.currentTime <= 0) return;
       // Once kept, Continue Watching is asked for again (the next screen shows this title first).
@@ -157,7 +161,7 @@ export function useTitlePlayback(
       video.removeEventListener('ended', report);
       report();
     };
-  }, [video, id, dispatch]);
+  }, [video, id, dispatch, keepProgress]);
 
   // The `<track>` of the chosen subtitle is shown, the others hidden.
   useEffect(() => {

@@ -10,7 +10,9 @@ import { demoOn, useDemoMedia } from '@/player/demo';
 import { attachSource } from '@/player/hls';
 import { useMedia } from '@/player/useMedia';
 import { useAds } from '@/player/useAds';
+import { useCarriedIn } from '@/player/useCarriedIn';
 import { useTitlePlayback } from '@/player/useTitlePlayback';
+import type { PlayerHandoff } from '@/player/handoff';
 import { usePlayerConfig } from '@/player/usePlayerConfig';
 import { useShowNav } from '@/screens/navVisibility';
 
@@ -34,7 +36,13 @@ export function PlayerScreen() {
   const dispatch = useAppDispatch();
   // The player fills the screen: never the tab bar over it.
   useShowNav(false);
-  const arrived = location.state as { title?: Title | null; autoplay?: boolean } | null;
+  const arrived = location.state as {
+    title?: Title | null;
+    autoplay?: boolean;
+    handoff?: PlayerHandoff;
+  } | null;
+  // Opened from a card's playing video: where it carries on, with its sound; a trailer plays the card's own address.
+  const handoff = arrived?.handoff ?? null;
   const fromState = arrived?.title ?? null;
   // Opened from a link or a reload: the title, if a rail has already brought it.
   const fromStore = useAppSelector((s) => {
@@ -48,7 +56,11 @@ export function PlayerScreen() {
   const toast = useAppSelector((s) => s.ui.toast);
   const say = useCallback((text: string) => dispatch(showToast(text)), [dispatch]);
   // What the title offers (its qualities, audio languages, subtitles, intro, season episodes): the API's.
-  const offer = useTitlePlayback(id, video, say);
+  const carry = useMemo(
+    () => ({ startAt: handoff?.at ?? null, keepProgress: !handoff?.src }),
+    [handoff?.at, handoff?.src],
+  );
+  const offer = useTitlePlayback(id, video, say, carry);
   const title = offer.title ?? fromState ?? fromStore;
   const { status, config } = usePlayerConfig();
   const [wrapRef, available] = useElementWidth<HTMLDivElement>();
@@ -100,7 +112,7 @@ export function PlayerScreen() {
   // Development only (`npm run dev`): `?video=<address>` plays that file for a title with no stream of its own,
   // so the player and its ads can be tried. A production build has no such override.
   const trial = import.meta.env.DEV ? new URLSearchParams(location.search).get('video') : null;
-  const src = trial ?? (offer.ready ? offer.src : (title?.previewVideoUrl ?? undefined));
+  const src = trial ?? handoff?.src ?? (offer.ready ? offer.src : (title?.previewVideoUrl ?? undefined));
   const poster = imageFor(title, '0-16x9') ?? undefined;
   // The stream into the `<video>`: an MP4 as it is, an HLS stream (`.m3u8`) through hls.js, with a
   // signed stream's signature on every piece. A new quality or language swaps it; where it was carries
@@ -110,7 +122,12 @@ export function PlayerScreen() {
     return attachSource(video, src, { onFail: () => say('This video cannot be played.') });
   }, [video, src, say]);
   // The title's ad breaks (pre-roll, mid-rolls, post-roll): an ad plays in its own video over this one.
-  const ads = useAds(id, video, Boolean(src));
+  // Carried on from a card's video: no pre-roll first, and breaks before where it carries on count as played.
+  // Unless the CMS says the pre-roll plays first ("Ad before the player").
+  const skipAds = handoff !== null && handoff.preroll !== 'play';
+  const ads = useAds(id, video, Boolean(src), skipAds ? { carryFrom: handoff?.at ?? 0 } : undefined);
+  // The card's playing video itself, over the player until the stream underneath takes over (`useCarriedIn`).
+  const [attachCarried, carriedOn] = useCarriedIn(id, video, handoff);
   const ad = ads.ad;
 
   return (
@@ -157,8 +174,12 @@ export function PlayerScreen() {
               key={id}
               ref={setVideo}
               poster={poster}
-              // Opened by Next episode (pressed, or the last one ended): it plays straight away.
-              autoPlay={Boolean(arrived?.autoplay)}
+              // Opened from a card's playing video: its sound carries over (the tap lets a browser start it with sound).
+              // Silent while the carried video still plays over it (it has the sound until this takes over).
+              muted={carriedOn || handoff?.muted}
+              // Opened by Next episode (pressed, or the last one ended), or carrying on from a card's
+              // video: it plays straight away.
+              autoPlay={Boolean(arrived?.autoplay || handoff)}
               playsInline
               // No published layout: the browser's own controls.
               controls={!config}
@@ -183,9 +204,18 @@ export function PlayerScreen() {
                 />
               ))}
             </video>
+            {/* The card's video, carried on: over the stream until it takes over. Drawn before the
+                controls, so they stay on top. */}
+            {handoff && (
+              <div
+                ref={attachCarried}
+                aria-hidden
+                style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: carriedOn ? 'block' : 'none' }}
+              />
+            )}
             {/* Waiting for the video's data: a ring round the centre, so a pressed Play is never a
                 frozen 0:00 with no sign of life. Under the controls: the Play button stays on top. */}
-            {own.buffering && (
+            {own.buffering && !carriedOn && (
               <div
                 role="status"
                 aria-label="Loading video"

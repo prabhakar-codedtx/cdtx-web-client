@@ -212,6 +212,12 @@ export interface Title {
   images: TitleImage[];
   logoUrl: string | null;
   previewVideoUrl: string | null;
+  /** What `previewVideoUrl` is on a rail that plays videos: `preview`, `trailer` or `main` (the title). */
+  previewKind?: 'preview' | 'trailer' | 'main' | string | null;
+  /** How a tap on the playing card video carries into the player; null when no video plays. */
+  previewHandoff?: PreviewHandoff | null;
+  /** The title's trailer: what a Trailer button plays (null or absent: it has none). */
+  trailerUrl?: string | null;
   availableUntil: string | null;
   entitlements: unknown;
   /** Only on a title asked for by id (`GET /v1/content/{id}`), not on a rail's titles. */
@@ -456,6 +462,12 @@ export interface Atom {
   role: string | null;
   showLogoWhenAvailable: boolean;
   titleSlot: number | null;
+  /** A Video atom (`type: 'video'`): the title's `previewVideoUrl` plays in its frame, over its picture
+   * (`style.image`, the poster), as this says. */
+  video?: VideoPlayback | null;
+  /** While the card's video plays: `fade` (fades out), `hide` (gone at once), `shrink` (to 75%, from its
+   * top-left corner); absent: stays. Back as it was when the video ends or stops. */
+  whilePlaying?: WhilePlaying | null;
 }
 
 export interface LayoutItem {
@@ -504,14 +516,60 @@ export interface Component {
   atoms: Atom[];
   autoLayout: AutoLayout;
   layoutRules: Rule[];
+  /** The whole component, while the card's video plays (as an atom's `whilePlaying`). */
+  whilePlaying?: WhilePlaying | null;
 }
+
+export type WhilePlaying = 'fade' | 'hide' | 'shrink' | string;
 
 /**
  * A card's video layer: which video (`preview` = the title's `previewVideoUrl`), where (`card`, or the
- * inner image's box `inset`; `left` / `top` / `width` / `height` in designed px from the card's top-left),
+ * inner image's box `inset`, or a box of its own `box`; `left` / `top` / `width` / `height` in designed px
+ * from the card's top-left), always under the shade,
  * what starts it, the seconds the picture shows first, the fade over the picture (ms), its end, whether it
  * starts muted, and where it sits among the card's layers (`zIndex`, on `stack`'s scale).
  */
+/**
+ * How a card's video plays, wherever it sits (the card's video layer, or a Video atom): what starts it,
+ * the seconds the picture shows first, the fade, what happens at its end, whether it starts muted, what a
+ * tap on it does (`onTap`) and whether the card's Play button carries on from it.
+ */
+export interface VideoPlayback {
+  trigger: 'onScreen' | 'onFocus' | 'onHover' | string;
+  delaySec: number;
+  fadeMs: number;
+  end: 'loop' | 'showThumbnail' | 'stop' | 'next' | string;
+  startMuted: boolean;
+  /** `openPlayer`: the player, carrying on from the video's second (see `Title.previewHandoff`);
+   * `openPlayerFromStart`; `openDetail`: the title's page; `none`: the tap is the card's own. */
+  onTap?: 'openPlayer' | 'openPlayerFromStart' | 'openDetail' | 'none' | string;
+  playButtonContinues?: boolean;
+  /** How far each edge of the box fades into what is behind it, a share of the box (0–0.5); null: sharp. */
+  edgeFade?: { left: number; right: number; top: number; bottom: number } | null;
+  /** Opening the title's page or the player from the playing video, it goes on playing there at the same
+   * second (`carry.ts`). False: the next screen starts its own. Absent (an older server): on. */
+  carryOn?: boolean;
+  /** A hero carousel waits while the video plays. Absent (older server): on. */
+  holdCarousel?: boolean;
+  /** Into the player from the playing video: the pre-roll `skip`ped (the video carries on) or `play`ed first. */
+  carryPreroll?: 'skip' | 'play' | string;
+  /** The player's sound when it opens from the card: `keep` the card video's, or `on`. */
+  playerSound?: 'keep' | 'on' | string;
+  /** The app's own Sound button for a card without one: its corner, or `none`. */
+  soundButton?: 'bottomRight' | 'bottomLeft' | 'topRight' | 'topLeft' | 'none' | string;
+  /** "While playing: Shrinks" shrinks an item to this share of its size; items change over `whilePlayingMs`. */
+  whilePlayingScale?: number;
+  whilePlayingMs?: number;
+}
+
+/** Carrying the card's playing video into the player: what the player opens (`main`: the title,
+ * `trailer`: its trailer, the card's own address) and where the card's video sits on that timeline —
+ * the player starts at `offsetSec` + the card video's second. Null `offsetSec`: from the beginning. */
+export interface PreviewHandoff {
+  target: 'main' | 'trailer' | string;
+  offsetSec: number | null;
+}
+
 export interface CardVideo {
   source: 'preview' | string;
   area: 'card' | 'inset' | string;
@@ -523,9 +581,19 @@ export interface CardVideo {
   trigger: 'onScreen' | 'onFocus' | 'onHover' | string;
   delaySec: number;
   fadeMs: number;
-  end: 'loop' | 'showThumbnail' | 'stop' | string;
+  end: 'loop' | 'showThumbnail' | 'stop' | 'next' | string;
   startMuted: boolean;
   zIndex: number;
+  onTap?: VideoPlayback['onTap'];
+  playButtonContinues?: boolean;
+  edgeFade?: VideoPlayback['edgeFade'];
+  carryOn?: boolean;
+  holdCarousel?: boolean;
+  carryPreroll?: VideoPlayback['carryPreroll'];
+  playerSound?: VideoPlayback['playerSound'];
+  soundButton?: VideoPlayback['soundButton'];
+  whilePlayingScale?: number;
+  whilePlayingMs?: number;
 }
 
 export interface Card {
