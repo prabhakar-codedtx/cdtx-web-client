@@ -5,3 +5,7 @@ dist-ssr
 .env
 .env.*.local
 tsconfig.tsbuildinfo
+
+# Playwright (npm run e2e): videos, traces and the HTML report
+test-results
+playwright-report

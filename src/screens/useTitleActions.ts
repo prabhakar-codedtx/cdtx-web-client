@@ -7,6 +7,7 @@ import { toggleWatchlist } from '@/app/pagesSlice';
 import type { Block, Fill, Rail, RailChip, SeeAllPageDesign, Title } from '@/lib/api/types';
 import { railForTile } from '@/lib/render/chips';
 import { collectionBlock } from '@/screens/collectionBlock';
+import { trailerStep } from '@/player/handoff';
 
 /** The page a tap happens on: what the list a `collection` tap opens needs to be drawn. */
 export interface ListFrom {
@@ -89,6 +90,16 @@ export function useTitleActions() {
       if (action === 'play') {
         // The player, laid out by the product's player config; the title goes along for its name and picture.
         navigate(`/play/${title.type ?? 'title'}/${title.id}`, { state: { title } });
+        return;
+      }
+      if (action === 'trailer') {
+        // The title's trailer, in the player from its beginning (a card playing it carries on: `HeroBanner`).
+        const step = trailerStep(title, null);
+        if (step?.to === 'player') {
+          navigate(`/play/${title.type ?? 'title'}/${title.id}`, { state: { title, handoff: step.handoff } });
+          return;
+        }
+        dispatch(showToast('This title has no trailer.'));
         return;
       }
       if (action === 'more_info' || action === 'detail') {

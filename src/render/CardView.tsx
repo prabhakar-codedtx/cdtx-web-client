@@ -27,6 +27,10 @@ import { resolveLayout } from '@/lib/layout/resolve';
 import type { Attribute, Box, LayoutRule, Relation } from '@/lib/layout/types';
 import { Img, type ImgPriority } from '@/render/Img';
 import { AtomView, flexOf, isDrawn, type PartCtx } from '@/render/Parts';
+import { edgeFadeCss, layerOf, videoAtomOf, whilePlayingCss } from '@/lib/render/video';
+import { handoffStep } from '@/player/handoff';
+import { useHandoff } from '@/player/useHandoff';
+import { HeroPreview } from '@/screens/HeroPreview';
 
 /**
  * One card: a block (`page.blocks[rail.blockKey]`) and one title. Nothing about how it looks is
@@ -274,11 +278,14 @@ export interface CardViewProps {
   /**
    * The card's video (its preview), drawn as the card's video layer says (`card.video`: its box and its
    * `zIndex` among the card's layers, by default the whole card over the pictures and under the shade),
-   * so the text and buttons stay readable over it.
+   * so the text and buttons stay readable over it — or, when the card has a Video component, in that
+   * component's own box. Unset on a card with a Video component: the card plays it itself.
    */
   video?: ReactNode;
   /** Buttons whose action has nothing to do right now (a Sound button while no video plays): not drawn. */
   hiddenActions?: readonly string[];
+  /** The card's video is playing: what is placed on the card does as its `whilePlaying` says. */
+  playing?: boolean;
 }
 
 interface Placed {
@@ -301,9 +308,38 @@ export function CardView({
   standalone,
   video,
   hiddenActions,
+  playing = false,
 }: CardViewProps) {
   const card = block.card;
   const fit = fitOf({ width: W, height: H }, card);
+  // How items change while the video plays, as the card's Player says (shrink size, speed).
+  const playback = card.video ?? videoAtomOf(block)?.atom.video ?? null;
+  const whileLook = { scale: playback?.whilePlayingScale, ms: playback?.whilePlayingMs };
+  // A Video component on the card: the video plays in its box (its poster under it). A rail's card plays
+  // it itself, muted, while its trigger holds (on screen, under the pointer, or focused); a tap on the
+  // playing video carries it into the player.
+  const videoAtom = videoAtomOf(block);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const handoff = useHandoff(onAction);
+  const ownLayer = videoAtom?.atom.video ? layerOf(videoAtom.atom.video) : null;
+  const ownArmed =
+    ownLayer?.trigger === 'onHover' ? hovered : ownLayer?.trigger === 'onFocus' ? focused || hovered : true;
+  const ownVideo =
+    video === undefined && ownLayer && title?.previewVideoUrl && ownArmed && !standalone ? (
+      <HeroPreview
+        key={title.id}
+        src={title.previewVideoUrl}
+        layer={ownLayer}
+        muted
+        onMutedByBrowser={noop}
+        onPlayingChange={noop}
+        onTap={
+          ownLayer.onTap !== 'none' ? (at) => void handoff(title, handoffStep(title, ownLayer, at, 'tap')) : undefined
+        }
+      />
+    ) : null;
+  const shownVideo = video ?? ownVideo;
   const resolveAgain = useRef<() => void>(() => {});
   const onResize = useCallback(() => resolveAgain.current(), []);
   const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction, onResize, priority, hiddenActions };
@@ -456,6 +492,16 @@ export function CardView({
       aria-label={title?.title ?? undefined}
       onClick={interactive ? open : undefined}
       onKeyDown={interactive ? onKey : undefined}
+      onMouseEnter={ownLayer ? () => setHovered(true) : undefined}
+      onMouseLeave={ownLayer ? () => setHovered(false) : undefined}
+      onFocus={ownLayer ? () => setFocused(true) : undefined}
+      onBlur={
+        ownLayer
+          ? (e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+            }
+          : undefined
+      }
     >
       {behind && numeral}
       <div
@@ -511,7 +557,7 @@ export function CardView({
             }}
           />
         )}
-        {video && (
+        {shownVideo && !videoAtom && (
           // The video layer: its box (the whole card, or the inner image's) and its place among the layers.
           <div
             style={{
@@ -519,7 +565,11 @@ export function CardView({
               pointerEvents: 'none',
               overflow: 'hidden',
               zIndex: card.video?.zIndex ?? 25,
-              ...(card.video?.area === 'inset' && card.video.width !== null && card.video.height !== null
+              // The Player's box (the inner image's, or one of its own); its edges may fade into the picture.
+              ...edgeFadeCss(card.video?.edgeFade),
+              ...((card.video?.area === 'inset' || card.video?.area === 'box') &&
+              card.video.width !== null &&
+              card.video.height !== null
                 ? {
                     left: (card.video.left ?? 0) * fit,
                     top: (card.video.top ?? 0) * fit,
@@ -530,7 +580,7 @@ export function CardView({
                 : { inset: 0 }),
             }}
           >
-            {video}
+            {shownVideo}
           </div>
         )}
         {card.shade.map((g, i) => (
@@ -548,7 +598,16 @@ export function CardView({
               key={p.id}
               data-item-id={p.id}
               data-show-on={p.atom?.showOn === 'hover' ? 'hover' : undefined}
-              style={{ ...placement(p), zIndex: p.z ?? undefined }}
+              style={{
+                ...placement(p),
+                zIndex: p.z ?? undefined,
+                // The Video component's box: its edges (poster and video) fade into the card's picture.
+                ...(videoAtom?.holder === p.id ? edgeFadeCss(videoAtom.atom.video?.edgeFade) : {}),
+                // While the card's video plays: faded, hidden or shrunk, as the CMS says (never the video's own box).
+                ...(videoAtom?.holder === p.id
+                  ? {}
+                  : whilePlayingCss(p.atom?.whilePlaying ?? p.comp?.whilePlaying, playing, whileLook)),
+              }}
             >
               {p.atom ? (
                 <AtomView
@@ -559,6 +618,20 @@ export function CardView({
                 />
               ) : (
                 <ComponentView comp={p.comp!} ctx={ctx} hasFrameWidth={p.frame.w !== null} />
+              )}
+              {shownVideo && videoAtom?.holder === p.id && (
+                // The Video component's box: the video over its poster, in the poster's corners.
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    overflow: 'hidden',
+                    pointerEvents: 'none',
+                    borderRadius: cornerCss(videoAtom.atom, W),
+                  }}
+                >
+                  {shownVideo}
+                </div>
               )}
             </div>
           ))}
@@ -586,4 +659,16 @@ function rankCss(rank: NonNullable<Block['rank']>): CSSProperties {
     } as CSSProperties;
   }
   return { color };
+}
+
+const noop = () => undefined;
+
+/** A Video atom's poster corners (`style.image.cornerRadiusFrac`, of the card's width, on its corners). */
+function cornerCss(atom: Atom, cardW: number): string | undefined {
+  const img = atom.style.image as { cornerRadiusFrac?: number | null; roundedCorners?: string[] } | null | undefined;
+  const r = (img?.cornerRadiusFrac ?? 0) * cardW;
+  if (!r) return undefined;
+  const on = img?.roundedCorners?.length ? img.roundedCorners : ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
+  const at = (c: string) => (on.includes(c) ? `${r}px` : '0');
+  return `${at('top-left')} ${at('top-right')} ${at('bottom-right')} ${at('bottom-left')}`;
 }
