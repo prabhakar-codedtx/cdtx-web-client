@@ -456,6 +456,12 @@ export function Rail({
     );
     items = [...items, ...Array.from({ length: coming }, () => null)];
   }
+  // Titles not here yet: the empty (shimmering) cards fill the lane, and one more peeks in, however few
+  // the first window holds, so a row waiting for its titles does not stop halfway across the screen.
+  if (scrolls && !loaded && w > 0) {
+    const fill = Math.min(30, Math.ceil((lane - start) / (w + gap)) + 1);
+    if (items.length < fill) items = Array.from({ length: fill }, () => null);
+  }
   // On the page's first row, the cards on screen when it opens (the ones across the lane, or the top two
   // of a column) load their pictures at once; the rest of the row stays lazy, loaded as it is scrolled to.
   const onScreen = !eager ? 0 : vertical ? 2 : Math.max(1, Math.ceil((lane - start) / Math.max(1, w + gap)));
@@ -484,7 +490,8 @@ export function Rail({
   // "See all" as an arrow only (`seeAll.style: arrow`): the header design's link is a chevron right after
   // the title, and the title and chevron are one link to the rail's titles.
   const arrowOnlyLink = rail.seeAll.show && rail.seeAll.style === 'arrow';
-  const strip = (b: Block) => {
+  // `span` is how wide the strip may be: the lane, or less where the caller pads it (a header with a start and an end).
+  const strip = (b: Block, span = lane) => {
     const s = b.card.strip;
     const along: Record<string, string> = {
       start: 'flex-start',
@@ -501,7 +508,7 @@ export function Rail({
           justifyContent: arrowOnlyLink ? 'flex-start' : (along[s?.distribute ?? ''] ?? 'flex-start'),
           gap: arrowOnlyLink ? 6 : (s?.gap ?? undefined),
           padding: `${s?.paddingY ?? 0}px ${s?.paddingX ?? 0}px`,
-          width: lane,
+          width: span,
           boxSizing: 'border-box',
         }}
       >
@@ -523,7 +530,7 @@ export function Rail({
                       : withLabel(a, rail.seeAll.label)
                     : a
                 }
-                ctx={stripCtx}
+                ctx={{ ...stripCtx, cardW: span }}
                 inFrame={false}
               />
             </span>
@@ -536,7 +543,7 @@ export function Rail({
   // card's shape it would be an empty box as tall as the lane is wide.
   const spanning = (b: Block, span = lane) =>
     b.card.display === 'strip' ? (
-      strip(b)
+      strip(b, span)
     ) : b.atoms.some((a) => a.frame) || b.components.some((c) => c.slot === 'card' && c.frame) ? (
       <CardView
         block={b}

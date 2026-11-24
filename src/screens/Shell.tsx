@@ -9,6 +9,7 @@ import { useFonts } from '@/lib/useFonts';
 import { TopNav } from '@/screens/TopNav';
 import { LanguageScreen } from '@/screens/LanguageScreen';
 import { useLanguageGate } from '@/screens/useLanguageGate';
+import { PageSkeleton } from '@/render/Skeleton';
 
 /**
  * The frame every screen sits in: it starts the client (launch config, then the tabs), holds the tab
@@ -57,7 +58,8 @@ export function Shell() {
       </div>
     );
   }
-  if (!launch) return <div>Loading…</div>;
+  // Before the app has started there is no tab bar either: the skeleton draws a stand-in.
+  if (!launch) return <PageSkeleton dt={dt} bar />;
   if (launch.maintenanceEnabled) {
     return (
       <div role="status">
@@ -75,12 +77,12 @@ export function Shell() {
     );
   }
   // A new viewer picks a language first (when the CMS has the screen on); everyone else goes straight in.
-  if (gate.status === 'checking') return <div>Loading…</div>;
+  if (gate.status === 'checking') return <PageSkeleton dt={dt} bar />;
   if (gate.status === 'show') return <LanguageScreen screen={gate.screen} onDone={choose} />;
   return (
     <>
-      <TopNav />
-      {status === 'ready' ? <Outlet /> : <div>Loading…</div>}
+      {pathname !== '/profiles' && <TopNav />}
+      {status === 'ready' ? <Outlet /> : <PageSkeleton dt={dt} />}
       {toast && (
         // Fixed to the window: on a long page a message at the end of it would never be seen.
         <div

@@ -6,6 +6,7 @@ import { Shell } from '@/screens/Shell';
 import { DetailDialog } from '@/screens/DetailDialog';
 import { DetailRoute, TabRoute } from '@/screens/Routes';
 import { LanguageRoute } from '@/screens/LanguageRoute';
+import { ProfilePicker } from '@/screens/ProfilePicker';
 import { PlayerScreen } from '@/player/PlayerScreen';
 import { SeeAllScreen } from '@/screens/SeeAllScreen';
 
@@ -25,6 +26,7 @@ function AppRoutes() {
         <Route element={<Shell />}>
           <Route index element={<TabRoute />} />
           <Route path="language" element={<LanguageRoute />} />
+          <Route path="profiles" element={<ProfilePicker />} />
           <Route path="p/:slug" element={<TabRoute />} />
           <Route path="title/:type/:id" element={<DetailRoute />} />
           <Route path="play/:type/:id" element={<PlayerScreen />} />

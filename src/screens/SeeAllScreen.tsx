@@ -7,6 +7,8 @@ import { fillCss, textCss } from '@/lib/render/paint';
 import { getDeliveryContext } from '@/lib/device/deviceContext';
 import { useElementWidth } from '@/lib/device/useElementWidth';
 import { CardView } from '@/render/CardView';
+import { GridSkeleton } from '@/render/Skeleton';
+import { useDt } from '@/lib/device/useDt';
 import { navLeftInset, navTopRoom } from '@/screens/navMetrics';
 import { defaultShown, useNavShown, useShowNav } from '@/screens/navVisibility';
 import { cardSize } from '@/screens/Rail';
@@ -44,6 +46,7 @@ export function SeeAllScreen() {
   const { slug, key } = useParams<{ slug: string; key: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const dt = useDt();
   const launch = useAppSelector((s) => s.launch.launch);
   const navStyle = useAppSelector((s) => s.launch.navStyle);
   const navShown = useNavShown();
@@ -187,13 +190,15 @@ export function SeeAllScreen() {
       <main
         ref={widthRef}
         style={{
+          // Before the page's own background is known (a direct visit) the app's dark one, so the shapes show.
+          ...(background ? {} : { background: '#000000' }),
           ...frame,
           padding: d.sidePadding,
           paddingTop: topRoom + d.sidePadding,
           paddingLeft: leftInset + d.sidePadding,
         }}
       >
-        Loading…
+        <GridSkeleton dt={dt} />
       </main>
     );
 
