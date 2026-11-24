@@ -7,6 +7,8 @@ import { ShareMenu } from '@/screens/ShareMenu';
 import { useDt } from '@/lib/device/useDt';
 import { useFonts } from '@/lib/useFonts';
 import { TopNav } from '@/screens/TopNav';
+import { LanguageScreen } from '@/screens/LanguageScreen';
+import { useLanguageGate } from '@/screens/useLanguageGate';
 import { PageSkeleton } from '@/render/Skeleton';
 
 /**
@@ -19,6 +21,7 @@ export function Shell() {
   const { pathname } = useLocation();
   const { status, error, launch, theme } = useAppSelector((s) => s.launch);
   const toast = useAppSelector((s) => s.ui.toast);
+  const { gate, choose } = useLanguageGate(launch);
 
   // Start, and ask again for the tabs when the window changes into or out of a phone's width.
   useEffect(() => {
@@ -73,6 +76,9 @@ export function Shell() {
       </div>
     );
   }
+  // A new viewer picks a language first (when the CMS has the screen on); everyone else goes straight in.
+  if (gate.status === 'checking') return <PageSkeleton dt={dt} bar />;
+  if (gate.status === 'show') return <LanguageScreen screen={gate.screen} onDone={choose} />;
   return (
     <>
       {pathname !== '/profiles' && <TopNav />}

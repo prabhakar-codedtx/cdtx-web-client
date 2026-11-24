@@ -1,4 +1,5 @@
-import { LOCALE, REGION } from '@/lib/config';
+import { REGION } from '@/lib/config';
+import { chosenLocale } from '@/lib/language/choice';
 import type { DeliveryContext } from '@/lib/api/types';
 
 /** Below this width the browser is a phone: it asks for the mobile designs. */
@@ -20,5 +21,5 @@ export function getDt(width: number = window.innerWidth): string {
 }
 
 export function getDeliveryContext(width?: number): DeliveryContext {
-  return { reg: REGION, locale: LOCALE, dt: getDt(width) };
+  return { reg: REGION, locale: chosenLocale(), dt: getDt(width) };
 }
