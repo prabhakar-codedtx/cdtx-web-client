@@ -18,7 +18,7 @@ import type {
   RailLayout,
   Title,
 } from '@/lib/api/types';
-import { useElementWidth } from '@/lib/device/useElementWidth';
+import { useElementWidth, useViewportHeight } from '@/lib/device/useElementWidth';
 import { useInView } from '@/lib/device/useInView';
 import { logLoading } from '@/lib/debug/loadingLog';
 import { CardView } from '@/render/CardView';
@@ -80,6 +80,47 @@ export function cardSize(
     w = room;
   }
   return { w: Math.max(0, Math.floor(w * 100) / 100), h: Math.max(0, Math.floor(h * 100) / 100) };
+}
+
+/** What a rail drawn up beside the hero needs to know of the hero: its designed size (px) and whether it fills the window. */
+export interface HeroDesign {
+  width: number;
+  height: number;
+  /** `card.stretch.height` is `screen`: the hero is as tall as the window. */
+  screen: boolean;
+}
+
+/**
+ * A rail drawn up beside the hero (`pullUp`) is laid out in the hero's own design: its start gutter, gaps and
+ * cards are px for a hero `design.width` wide, and its pull-up is px for a hero `design.height` tall. The hero
+ * (and the heading drawn on it) follow the page, so the rail follows it too: across in proportion to the width;
+ * up by `pullFollow` (the share of the hero's height the pull follows) of the hero's change in height.
+ * Otherwise its cards would sit at a fixed spot wherever the window is, on top of the hero's buttons or off the
+ * edge. Any other rail is returned as it is.
+ */
+function scaledToHero(
+  rl: RailLayout,
+  available: number,
+  design: HeroDesign | undefined,
+  windowHeight: number,
+): RailLayout {
+  if (!rl.pullUp || !design || !design.width || !design.height || available <= 0) return rl;
+  const k = available / design.width;
+  const heroHeight = design.screen && windowHeight > 0 ? windowHeight : (available * design.height) / design.width;
+  const follow = rl.pullFollow ?? 0;
+  const px = (v: number | null | undefined) => (v === null || v === undefined ? null : v * k);
+  return {
+    ...rl,
+    start: px(rl.start),
+    end: px(rl.end),
+    gap: px(rl.gap),
+    cardWidth: px(rl.cardWidth),
+    cardHeight: px(rl.cardHeight),
+    headerGap:
+      rl.headerGap !== null && rl.headerGap < 0 && follow > 0
+        ? Math.min(0, rl.headerGap - follow * (heroHeight - design.height))
+        : rl.headerGap,
+  };
 }
 
 /** An atom with the rail's own words in place of its text layer's, when the rail has some. */
@@ -229,6 +270,7 @@ export function Rail({
   canLoad,
   loading,
   onSeen,
+  hero,
 }: {
   rail: RailJson;
   blocks: Record<string, Block>;
@@ -247,6 +289,8 @@ export function Rail({
   /** The viewer reached this row (it is on screen, or a card in it has focus): the page may ask for the
    * next batch of rows. */
   onSeen?: () => void;
+  /** The page's hero design: a rail drawn up beside the hero follows the page in that proportion (`scaledToHero`). */
+  hero?: HeroDesign;
 }) {
   const dispatch = useAppDispatch();
   // A chip rail: the row of chips above the cards, and the picked chip's titles in place of the rail's
@@ -264,6 +308,7 @@ export function Rail({
   const header = rail.headerKey ? (blocks[rail.headerKey] ?? null) : null;
   const footer = rail.footerKey ? (blocks[rail.footerKey] ?? null) : null;
   const [widthRef, available] = useElementWidth<HTMLDivElement>();
+  const windowHeight = useViewportHeight();
   // Watched only once the row is drawn at its real height (its width known): see `useInView`.
   const [inViewRef, inView] = useInView<HTMLElement>({ enabled: available > 0 });
   // On screen now (no margin): the viewer has reached this row.
@@ -428,9 +473,9 @@ export function Rail({
   if (entry && (entry.status === 'failed' || (entry.status === 'ready' && (entry.data?.length ?? 0) === 0)))
     return null;
 
-  const rl = rail.railLayout;
-  const body = rl.bodyPadding;
+  const body = rail.railLayout.bodyPadding;
   const lane = Math.max(0, available - (body?.left ?? 0) - (body?.right ?? 0));
+  const rl = scaledToHero(rail.railLayout, available, hero, windowHeight);
   const loaded = tileCards ?? (entry?.status === 'ready' && entry.data ? entry.data : null);
   let items: (Title | null)[] = loaded ?? Array.from({ length: rail.source.pageSize ?? 0 }, () => null);
   // An unknown layout is drawn as a carousel.

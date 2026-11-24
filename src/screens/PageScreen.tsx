@@ -130,6 +130,17 @@ export function PageScreen({
   // A rail whose titles came back none (a library emptied since the page was asked for: the
   // page's `count` still says 1, the list fetched again after the last Remove says 0) draws nothing.
   const items = useAppSelector((s) => s.pages.items);
+  // The hero's design: a rail drawn up beside the hero is laid out in it (see `scaledToHero`).
+  const heroRail = rails.find((r) => r.layout === 'hero');
+  const heroCard = heroRail?.blockKey ? blocks[heroRail.blockKey]?.card : undefined;
+  const heroDesign =
+    heroCard?.width && heroCard.height
+      ? {
+          width: heroCard.width,
+          height: heroCard.height,
+          screen: heroCard.stretch?.height === 'screen' && !inDialog,
+        }
+      : undefined;
   const drawn = rails.filter((r) => {
     const e = r.source.contentUrl ? items[r.source.contentUrl] : undefined;
     return !(e?.status === 'ready' && (e.data?.length ?? 0) === 0);
@@ -182,6 +193,7 @@ export function PageScreen({
                 blocks={blocks}
                 eager={rail.key === firstRow}
                 loading={loading}
+                hero={heroDesign}
                 canLoad={loading ? (rowIndex.get(rail.key) ?? 0) < letIn : undefined}
                 onSeen={() => reached(rowIndex.get(rail.key) ?? 0)}
                 onOpen={(t, r) => open(t, r, listFrom)}

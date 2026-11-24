@@ -693,6 +693,12 @@ export interface RailLayout {
   headerGap: number | null;
   start: number | null;
   end: number | null;
+  /** A rail drawn up beside the hero by this many px. Its start gutter, gaps and cards are sized for the hero's
+   * designed width, so they follow the page's width as the hero does (see `scaledToHero` in `Rail.tsx`). */
+  pullUp?: number | null;
+  /** The share (0 to 1) of the hero's height that `pullUp` follows: with the hero as tall as the window, the pull
+   * is `pullUp` at the hero's designed height and changes by this share of any difference from it. */
+  pullFollow?: number | null;
   /** TV: free room to keep around the cards for the focus look. */
   focusInset: Point | null;
   direction: 'horizontal' | 'vertical' | string | null;
