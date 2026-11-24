@@ -4,6 +4,7 @@ import { path } from '@/lib/api/endpoints';
 import type { NavBarStyle, NavBarText, NavFade, NavPage } from '@/lib/api/types';
 import { rgba } from '@/lib/render/paint';
 import { sidebarMetrics } from '@/screens/navMetrics';
+import { ProfileMenu, type MenuLook } from '@/screens/ProfileMenu';
 
 /**
  * The tab bar as the CMS designed it (Design System → Navigation; `GET {tabsURL}` → `style`, for
@@ -94,6 +95,15 @@ export function StyledNav({
           .replace('#', '')
           .slice(0, 6)}`
       : null;
+
+  // The profile icon at the bar's end, in the bar's own colours: a light circle with the bar's colour as the person.
+  const look: MenuLook = {
+    ink: style.itemColor ?? '#ffffff',
+    surface: style.background.color ?? '#14141b',
+  };
+  const profile = (
+    <ProfileMenu look={look} where={side ? 'side' : bottom ? 'bottom' : 'top'} sideWidth={sideWidth} />
+  );
 
   const bar: CSSProperties = {
     position: 'fixed',
@@ -228,6 +238,7 @@ export function StyledNav({
             </div>
           )}
         </div>
+        {profile}
       </nav>
     );
   }
@@ -284,6 +295,7 @@ export function StyledNav({
             />
           ))}
         </div>
+        {profile}
       </nav>
     </>
   );
