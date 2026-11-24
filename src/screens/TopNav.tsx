@@ -3,6 +3,8 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAppSelector } from '@/app/hooks';
 import { path } from '@/lib/api/endpoints';
 import { PRODUCT } from '@/lib/config';
+import { pickerOf, profileTypesOf } from '@/lib/profiles/launch';
+import { useProfiles } from '@/lib/profiles/profiles';
 import { NAV_HEIGHT } from '@/screens/navMetrics';
 import { useNavShown } from '@/screens/navVisibility';
 import { StyledNav } from '@/screens/StyledNav';
@@ -34,6 +36,11 @@ const CSS = `
 .nav-menu-item:hover, .nav-menu-item:focus-visible { color: var(--nav-text); background: rgba(255,255,255,0.08); outline: none; }
 .nav-menu-item[aria-current="page"] { color: var(--nav-text); }
 .nav-menu-icon { width: 22px; height: 22px; flex: none; }
+.nav-profile { margin-left: auto; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 50%; background: var(--nav-raised); color: var(--nav-text);
+  font-size: 16px; font-weight: 700; text-decoration: none; }
+.nav-profile:hover { filter: brightness(1.2); }
+.nav-profile:focus-visible { outline: 2px solid var(--nav-primary); outline-offset: 4px; }
 .nav-back { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
   padding: 0; border: 0; border-radius: 50%; background: var(--nav-raised); color: var(--nav-text); cursor: pointer;
   transition: filter 0.12s ease, transform 0.12s ease; }
@@ -113,6 +120,10 @@ function ClientNav() {
   const brandImage = typeof raw?.productImage === 'string' && raw.productImage ? raw.productImage : null;
   const brandName = typeof raw?.productName === 'string' && raw.productName ? raw.productName : PRODUCT;
   const [imageFailed, setImageFailed] = useState(false);
+  // Profiles: shown only when the CMS sends the kinds and the screen (`profileTypes`, `profilePicker`).
+  const profilesOn = profileTypesOf(raw).length > 0 && pickerOf(raw) !== null;
+  const { profiles, activeId } = useProfiles();
+  const me = profiles.find((p) => p.id === activeId) ?? null;
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const onDetail = pathname.startsWith('/title/');
@@ -288,6 +299,16 @@ function ClientNav() {
             {t.title ?? t.slug}
           </NavLink>
         ))
+      )}
+      {/* Who is watching: opens "Who's watching?" (switch profile, or add one with the +). */}
+      {profilesOn && (
+        <NavLink
+          to="/profiles"
+          className="nav-profile"
+          aria-label={me ? `Profile: ${me.name}. Switch profile` : 'Profiles'}
+        >
+          {me ? me.name.charAt(0).toUpperCase() : '+'}
+        </NavLink>
       )}
     </nav>
   );

@@ -75,7 +75,7 @@ export function Shell() {
   }
   return (
     <>
-      <TopNav />
+      {pathname !== '/profiles' && <TopNav />}
       {status === 'ready' ? <Outlet /> : <PageSkeleton dt={dt} />}
       {toast && (
         // Fixed to the window: on a long page a message at the end of it would never be seen.
