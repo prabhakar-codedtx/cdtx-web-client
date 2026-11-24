@@ -5,6 +5,7 @@ import { store } from '@/app/store';
 import { Shell } from '@/screens/Shell';
 import { DetailDialog } from '@/screens/DetailDialog';
 import { DetailRoute, TabRoute } from '@/screens/Routes';
+import { LanguageRoute } from '@/screens/LanguageRoute';
 import { PlayerScreen } from '@/player/PlayerScreen';
 import { SeeAllScreen } from '@/screens/SeeAllScreen';
 
@@ -23,6 +24,7 @@ function AppRoutes() {
       <Routes location={background ?? location}>
         <Route element={<Shell />}>
           <Route index element={<TabRoute />} />
+          <Route path="language" element={<LanguageRoute />} />
           <Route path="p/:slug" element={<TabRoute />} />
           <Route path="title/:type/:id" element={<DetailRoute />} />
           <Route path="play/:type/:id" element={<PlayerScreen />} />

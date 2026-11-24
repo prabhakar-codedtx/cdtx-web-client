@@ -4,7 +4,8 @@ import { useAppDispatch } from '@/app/hooks';
 import { viewerChanged } from '@/app/pagesSlice';
 import { getEpisodes, getTitle, path, putProgress } from '@/lib/api/endpoints';
 import type { NextEpisode, Title } from '@/lib/api/types';
-import { LOCALE, REGION } from '@/lib/config';
+import { REGION } from '@/lib/config';
+import { chosenLocale } from '@/lib/language/choice';
 import { useDt } from '@/lib/device/useDt';
 import type { Media, Option } from '@/player/useMedia';
 
@@ -72,7 +73,7 @@ export function useTitlePlayback(
   useEffect(() => {
     if (!id) return;
     let live = true;
-    const ctx = { reg: REGION, locale: LOCALE, dt };
+    const ctx = { reg: REGION, locale: chosenLocale(), dt };
     Promise.all([getTitle(id, ctx).catch(() => null), getEpisodes(id, ctx).catch(() => [])]).then(
       ([t, list]) => live && setLoaded({ id, title: t, episodes: list }),
     );
