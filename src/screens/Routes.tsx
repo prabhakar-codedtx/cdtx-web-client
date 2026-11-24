@@ -5,6 +5,7 @@ import { loadPage, pageKey } from '@/app/pagesSlice';
 import { DETAIL_SCREEN } from '@/lib/api/endpoints';
 import { DialogRoomContext } from '@/lib/device/dialogContext';
 import { useDt } from '@/lib/device/useDt';
+import { DetailSkeleton, PageSkeleton } from '@/render/Skeleton';
 import { PageScreen } from '@/screens/PageScreen';
 import { defaultShown, useShowNav } from '@/screens/navVisibility';
 
@@ -50,7 +51,12 @@ function Screen({ slug, contentId, type }: { slug: string | undefined; contentId
       </div>
     );
   }
-  return <div>Loading…</div>;
+  // The page is on its way: the shapes of a title's page (or of a storefront) take its place.
+  return contentId ? (
+    <DetailSkeleton dt={dt} inDialog={inDialog} />
+  ) : (
+    <PageSkeleton dt={dt} inDialog={inDialog} />
+  );
 }
 
 /** `/` (the default tab) and `/p/:slug`. */

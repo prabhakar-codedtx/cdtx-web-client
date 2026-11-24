@@ -456,6 +456,12 @@ export function Rail({
     );
     items = [...items, ...Array.from({ length: coming }, () => null)];
   }
+  // Titles not here yet: the empty (shimmering) cards fill the lane, and one more peeks in, however few
+  // the first window holds, so a row waiting for its titles does not stop halfway across the screen.
+  if (scrolls && !loaded && w > 0) {
+    const fill = Math.min(30, Math.ceil((lane - start) / (w + gap)) + 1);
+    if (items.length < fill) items = Array.from({ length: fill }, () => null);
+  }
   // On the page's first row, the cards on screen when it opens (the ones across the lane, or the top two
   // of a column) load their pictures at once; the rest of the row stays lazy, loaded as it is scrolled to.
   const onScreen = !eager ? 0 : vertical ? 2 : Math.max(1, Math.ceil((lane - start) / Math.max(1, w + gap)));
