@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import { profileId } from '@/lib/api/profile';
+import { activeProfile } from '@/lib/profiles/profiles';
 import { createLogger } from '@/lib/logger/logger';
 import type { Envelope } from '@/lib/api/types';
 
@@ -41,6 +42,12 @@ http.interceptors.request.use((config) => {
   (config as { _startedAt?: number })._startedAt = start;
   // The viewer (Continue Watching): a header, never in the URL.
   config.headers.set('X-Profile-Id', profileId());
+  // The kind of profile watching (Adult, Kids): the server serves only what it may see. Addresses the
+  // server handed out already carry it, and the launch config is the same for every profile.
+  const kind = activeProfile()?.type;
+  const url = config.url ?? '';
+  if (kind && !url.includes('/v1/launch/') && !/[?&]profileType=/.test(url) && !config.params?.profileType)
+    config.params = { ...config.params, profileType: kind };
   log.debug(`→ ${config.method?.toUpperCase()} ${config.url}`);
   return config;
 });
