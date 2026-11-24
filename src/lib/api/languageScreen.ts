@@ -18,6 +18,11 @@ export interface ScreenLanguage {
 export interface LanguageScreen {
   /** False: the screen is off (or has no language on) and the app goes straight in. */
   enabled: boolean;
+  /**
+   * Whether a viewer who has not chosen yet is put in front of the screen when the app first opens.
+   * False: it is only offered in the profile menu. Absent on an older server, which always shows it.
+   */
+  showFirstVisit?: boolean;
   device: string;
   title: string;
   subtitle: string;

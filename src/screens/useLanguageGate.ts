@@ -13,7 +13,8 @@ export type LanguageGate =
 
 /**
  * Whether the "Choose your language" screen stands in front of the app. It does for a viewer who has
- * not chosen yet, when the CMS has the screen on for this device. Anything that goes wrong (an older
+ * not chosen yet, when the CMS has the screen on for this device and wants it on the first visit
+ * (`showFirstVisit`; when off the viewer is only offered it in the profile menu). Anything that goes wrong (an older
  * server, a failed call) lets the viewer in: the screen must never be the reason nothing opens.
  */
 export function useLanguageGate(launch: Launch | null): {
@@ -27,7 +28,7 @@ export function useLanguageGate(launch: Launch | null): {
     ? { status: 'done' }
     : !launch || loading
       ? { status: 'checking' }
-      : screen
+      : screen && screen.showFirstVisit !== false
         ? { status: 'show', screen }
         : { status: 'done' };
 
