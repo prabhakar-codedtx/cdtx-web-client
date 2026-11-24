@@ -706,7 +706,10 @@ export function Rail({
                 // A carousel scrolls sideways; a banner fits across and never scrolls; a grid wraps.
                 overflowX: scrolls ? 'auto' : 'hidden',
                 paddingLeft: start + (inset?.x ?? 0),
-                paddingRight: end + (inset?.x ?? 0),
+                // A rail drawn beside the hero is a column: its row stops `end` short of the window's edge (the
+                // cards scroll inside the column) instead of running under it.
+                paddingRight: (rl.pullUp ? 0 : end) + (inset?.x ?? 0),
+                marginRight: rl.pullUp ? end : undefined,
                 paddingTop: inset?.y ?? undefined,
                 paddingBottom: inset?.y ?? undefined,
               }}
