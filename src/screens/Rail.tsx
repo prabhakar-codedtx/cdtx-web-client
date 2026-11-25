@@ -705,10 +705,12 @@ export function Rail({
                 rowGap: layout === 'grid' ? (rl.rowGap ?? gap) : gap,
                 // A carousel scrolls sideways; a banner fits across and never scrolls; a grid wraps.
                 overflowX: scrolls ? 'auto' : 'hidden',
-                paddingLeft: start + (inset?.x ?? 0),
-                // A rail drawn beside the hero is a column: its row stops `end` short of the window's edge (the
-                // cards scroll inside the column) instead of running under it.
+                // A rail drawn beside the hero is a column: its row begins `start` in from the window's left and stops
+                // `end` short of its right (the cards scroll inside that column, never under the hero's text or past
+                // the window), instead of padding a row that spans the whole window.
+                paddingLeft: (rl.pullUp ? 0 : start) + (inset?.x ?? 0),
                 paddingRight: (rl.pullUp ? 0 : end) + (inset?.x ?? 0),
+                marginLeft: rl.pullUp ? start : undefined,
                 marginRight: rl.pullUp ? end : undefined,
                 paddingTop: inset?.y ?? undefined,
                 paddingBottom: inset?.y ?? undefined,
