@@ -164,15 +164,12 @@ function Pic({ lang, glyph }: { lang: ScreenLanguage; glyph: string }) {
   );
 }
 
-/** The names a built-in tile shows, by what the screen says to show. */
+/**
+ * The name a built-in tile shows: the language in its own script (தமிழ், తెలుగు). There is no English
+ * name beside it; English shows only where the language has no name of its own (English itself).
+ */
 function names(lang: ScreenLanguage, s: Screen): { primary: string; secondary: string | null } {
-  if (s.showNativeName && lang.nativeName) {
-    return {
-      primary: lang.nativeName,
-      secondary: s.showEnglishName && lang.nativeName !== lang.name ? lang.name : null,
-    };
-  }
-  return { primary: lang.name, secondary: null };
+  return { primary: s.showNativeName && lang.nativeName ? lang.nativeName : lang.name, secondary: null };
 }
 
 function BuiltInTile({
