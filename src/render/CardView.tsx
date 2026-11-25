@@ -345,6 +345,11 @@ export function CardView({
   const ctx: PartCtx = { title, fit, cardW: W, aspect: card.imageAspect, onAction, onResize, priority, hiddenActions };
   // The designed card at the size it is drawn: what a fixed or minimum box is a fraction of.
   const designed = { w: (card.width ?? W) * fit, h: (card.height ?? H) * fit };
+  // A picture (or video) box that spans the whole designed width of a card stretched across the screen is drawn
+  // across the whole window: the content scales by one factor (the smaller of the two), so on a window that is
+  // wider than the design is for its height the box would stop short and leave a bare strip at the right.
+  const spansWidth = (left: number | null, width: number | null) =>
+    card.stretch?.width === 'screen' && card.width != null && (left ?? 0) <= 0 && (width ?? 0) >= card.width;
   const rootRef = useRef<HTMLDivElement>(null);
   const showParts = Boolean(title) || Boolean(standalone);
 
@@ -541,7 +546,7 @@ export function CardView({
               position: 'absolute',
               left: (inset.left ?? 0) * fit,
               top: (inset.top ?? 0) * fit,
-              width: inset.width !== null ? inset.width * fit : undefined,
+              width: spansWidth(inset.left, inset.width) ? W : inset.width !== null ? inset.width * fit : undefined,
               height: inset.height !== null ? inset.height * fit : undefined,
               ...objectFitCss(inset),
               clipPath: polygonCss(inset.shapePolygon),
@@ -573,7 +578,7 @@ export function CardView({
                 ? {
                     left: (card.video.left ?? 0) * fit,
                     top: (card.video.top ?? 0) * fit,
-                    width: card.video.width * fit,
+                    width: spansWidth(card.video.left, card.video.width) ? W : card.video.width * fit,
                     height: card.video.height * fit,
                     clipPath: polygonCss(card.video.shapePolygon),
                   }
