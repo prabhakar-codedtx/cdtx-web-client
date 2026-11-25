@@ -4,9 +4,12 @@ import { useAppSelector } from '@/app/hooks';
 import { useDt } from '@/lib/device/useDt';
 import { pickerOf, profileTypesOf, type ProfileType } from '@/lib/profiles/launch';
 import {
+  activeProfile,
   addProfile,
   chooseProfile,
   nameProblem,
+  removeProfile,
+  updateProfile,
   useProfiles,
   type LocalProfile,
 } from '@/lib/profiles/profiles';
@@ -19,6 +22,10 @@ import {
  *
  * Choosing a profile, or adding one, reloads the app on its home screen: every page, rail and count
  * is then asked for as that kind of profile (`profileType`, added by `lib/api/client.ts`).
+ *
+ * "Manage profiles" turns the tiles into edit buttons: a profile's name and kind can be changed, or
+ * the profile deleted (after a confirmation). Changing or deleting the profile that is watching
+ * reloads the screen, so nothing keeps being asked for as the old kind.
  */
 
 const CSS = `
@@ -33,6 +40,9 @@ const CSS = `
 .pp-tile:hover .pp-face, .pp-tile:focus-visible .pp-face { transform: scale(1.06); border-color: #fff; }
 .pp-tile:hover, .pp-tile:focus-visible { color: #fff; outline: none; }
 .pp-add .pp-face { border: 2px dashed #6b6b7a; background: transparent; color: #ccccd9; }
+.pp-edit-badge { position: absolute; right: 6px; bottom: 6px; width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.72); color: #fff; font-size: 15px; }
+.pp-managing .pp-face { border-color: #8a8a99; }
 .pp-badge { position: absolute; top: -6px; right: -6px; padding: 2px 8px; border-radius: 6px;
   background: #f5b300; color: #111; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
 .pp-overlay { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center;
@@ -56,6 +66,9 @@ const CSS = `
 .pp-btn-primary { background: #fff; color: #111; }
 .pp-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 .pp-btn-ghost { background: #2a2d38; color: #fff; }
+.pp-btn-danger { background: #3a1f24; color: #ff8a8a; margin-right: auto; }
+.pp-confirm { margin: 0; font-size: 15px; color: #ccccd9; line-height: 1.4; }
+.pp-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 .pp-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 @media (max-width: 600px) {
   .pp-overlay { padding: 0; align-items: flex-end; }
@@ -77,7 +90,18 @@ function sizeOf(type: ProfileType | undefined, phone: boolean): { w: number; h: 
   };
 }
 
-function Face({ type, name, phone }: { type: ProfileType | undefined; name: string; phone: boolean }) {
+function Face({
+  type,
+  name,
+  phone,
+  editable = false,
+}: {
+  type: ProfileType | undefined;
+  name: string;
+  phone: boolean;
+  /** Drawn with a pencil: the tile edits the profile rather than opening it. */
+  editable?: boolean;
+}) {
   const { w, h, radius } = sizeOf(type, phone);
   const style: CSSProperties = {
     width: w,
@@ -94,6 +118,7 @@ function Face({ type, name, phone }: { type: ProfileType | undefined; name: stri
           {type.badge ?? 'KIDS'}
         </span>
       )}
+      {editable && <span className="pp-edit-badge">✎</span>}
     </span>
   );
 }
@@ -105,6 +130,8 @@ export function ProfilePicker() {
   const types = useMemo(() => profileTypesOf(raw), [raw]);
   const { profiles } = useProfiles();
   const [adding, setAdding] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const [editing, setEditing] = useState<LocalProfile | null>(null);
   const navigate = useNavigate();
 
   // The device can only show what the server sent: without profile kinds there is nothing to pick.
@@ -130,7 +157,19 @@ export function ProfilePicker() {
   const f = picker.titleFont;
 
   return (
-    <div className="pp" style={{ background: picker.background }}>
+    <div
+      className={managing ? 'pp pp-managing' : 'pp'}
+      style={{
+        background: picker.background,
+        ...(picker.backgroundImage
+          ? {
+              backgroundImage: `url("${picker.backgroundImage}")`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }
+          : {}),
+      }}
+    >
       <style>{CSS}</style>
       <h1
         style={{
@@ -148,13 +187,18 @@ export function ProfilePicker() {
       <ul className="pp-list" aria-label="Profiles" style={{ gap: picker.gap, maxWidth: rowMax }}>
         {profiles.map((p) => (
           <li key={p.id}>
-            <button type="button" className="pp-tile" onClick={() => open(p.id)} aria-label={p.name}>
-              <Face type={typeOf(p)} name={p.name} phone={phone} />
+            <button
+              type="button"
+              className="pp-tile"
+              onClick={() => (managing ? setEditing(p) : open(p.id))}
+              aria-label={managing ? `Edit ${p.name}` : p.name}
+            >
+              <Face type={typeOf(p)} name={p.name} phone={phone} editable={managing} />
               <span>{p.name}</span>
             </button>
           </li>
         ))}
-        {canAdd && (
+        {canAdd && !managing && (
           <li>
             <button
               type="button"
@@ -180,12 +224,24 @@ export function ProfilePicker() {
         )}
       </ul>
       {profiles.length > 0 && (
-        <button type="button" className="pp-btn pp-btn-ghost" onClick={() => navigate(-1)}>
-          Back
-        </button>
+        <div className="pp-buttons">
+          <button
+            type="button"
+            className="pp-btn pp-btn-ghost"
+            aria-pressed={managing}
+            onClick={() => setManaging((m) => !m)}
+          >
+            {managing ? 'Done' : 'Manage profiles'}
+          </button>
+          {!managing && (
+            <button type="button" className="pp-btn pp-btn-ghost" onClick={() => navigate(-1)}>
+              Back
+            </button>
+          )}
+        </div>
       )}
       {adding && (
-        <AddProfileDialog
+        <ProfileDialog
           title={add.formTitle}
           question={add.typeQuestion}
           types={types}
@@ -194,35 +250,65 @@ export function ProfilePicker() {
           onSaved={(p) => open(p.id)}
         />
       )}
+      {editing && (
+        <ProfileDialog
+          title="Edit profile"
+          question={add.typeQuestion}
+          types={types}
+          existing={profiles}
+          profile={editing}
+          onCancel={() => setEditing(null)}
+          onSaved={() => {
+            // The kind (or the profile) watching has changed: start again so nothing is asked for as the old one.
+            const watching = editing.id === activeProfile()?.id;
+            setEditing(null);
+            if (watching) window.location.reload();
+          }}
+          onDeleted={() => {
+            const watching = editing.id === activeProfile()?.id;
+            removeProfile(editing.id);
+            setEditing(null);
+            if (watching) window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /**
- * The screen the "+" opens: a name, then which kind of profile it is (one choice per profile type;
- * with only one the question is skipped). The default kind is chosen to start with. Save adds the
- * profile and opens it; Escape or Cancel adds nothing.
+ * The screen the "+" opens, and (with `profile`) the one that edits a profile: a name, then which
+ * kind of profile it is (one choice per profile type; with only one the question is skipped). Adding
+ * starts on the default kind; Save adds the profile and opens it. Editing starts on the profile's own
+ * name and kind; Save keeps the change, and Delete (after a confirmation) takes the profile off this
+ * device. Escape or Cancel changes nothing.
  */
-function AddProfileDialog({
+function ProfileDialog({
   title,
   question,
   types,
   existing,
+  profile,
   onCancel,
   onSaved,
+  onDeleted,
 }: {
   title: string;
   question: string;
   types: ProfileType[];
   existing: readonly LocalProfile[];
+  /** Given: the profile being edited. */
+  profile?: LocalProfile;
   onCancel: () => void;
   onSaved: (p: LocalProfile) => void;
+  onDeleted?: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [type, setType] = useState((types.find((t) => t.isDefault) ?? types[0]!).key);
+  const [name, setName] = useState(profile?.name ?? '');
+  const [type, setType] = useState(profile?.type ?? (types.find((t) => t.isDefault) ?? types[0]!).key);
   const [touched, setTouched] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const problem = nameProblem(name, existing);
+  const problem = nameProblem(name, existing, profile?.id);
 
   useEffect(() => {
     input.current?.focus();
@@ -234,7 +320,7 @@ function AddProfileDialog({
   const save = () => {
     setTouched(true);
     if (problem) return;
-    const made = addProfile(name, type);
+    const made = profile ? updateProfile(profile.id, { name, type }) : addProfile(name, type);
     if (made) onSaved(made);
   };
 
@@ -247,7 +333,7 @@ function AddProfileDialog({
         aria-labelledby="pp-add-title"
         onSubmit={(e) => {
           e.preventDefault();
-          save();
+          if (!confirming) save();
         }}
       >
         <h2 id="pp-add-title">{title}</h2>
@@ -290,14 +376,35 @@ function AddProfileDialog({
             </div>
           </fieldset>
         )}
-        <div className="pp-actions">
-          <button type="button" className="pp-btn pp-btn-ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="submit" className="pp-btn pp-btn-primary" disabled={!name.trim()}>
-            Save
-          </button>
-        </div>
+        {confirming && profile ? (
+          <>
+            <p className="pp-confirm" role="alert">
+              Delete “{profile.name}”? It is taken off this device. This cannot be undone.
+            </p>
+            <div className="pp-actions">
+              <button type="button" className="pp-btn pp-btn-ghost" onClick={() => setConfirming(false)}>
+                Keep it
+              </button>
+              <button type="button" className="pp-btn pp-btn-primary" onClick={() => onDeleted?.()}>
+                Delete
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="pp-actions">
+            {profile && onDeleted && (
+              <button type="button" className="pp-btn pp-btn-danger" onClick={() => setConfirming(true)}>
+                Delete profile
+              </button>
+            )}
+            <button type="button" className="pp-btn pp-btn-ghost" onClick={onCancel}>
+              Cancel
+            </button>
+            <button type="submit" className="pp-btn pp-btn-primary" disabled={!name.trim()}>
+              Save
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

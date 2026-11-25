@@ -29,6 +29,8 @@ export interface AddProfileSettings {
 export interface PickerSettings {
   title: string;
   background: string;
+  /** A picture behind the screen (the CMS's `backgroundImage`); null: the colour only. */
+  backgroundImage: string | null;
   titleColor: string;
   titleFont: { fontFamily?: string; fontSize?: number; fontWeight?: number; letterSpacing?: number } | null;
   gap: number;
@@ -90,6 +92,7 @@ export function pickerOf(raw: Record<string, unknown> | undefined): PickerSettin
   return {
     title: str(s.title) ?? "Who's watching?",
     background: str(s.background) ?? '#0b0d12',
+    backgroundImage: str(s.backgroundImage),
     titleColor: str(s.titleColor) ?? '#ffffff',
     titleFont: Object.keys(font).length ? font : null,
     gap: num(s.gap, 24),

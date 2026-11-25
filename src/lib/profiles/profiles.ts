@@ -77,12 +77,19 @@ export function useProfiles(): State {
 export const activeProfile = (): LocalProfile | null =>
   state.profiles.find((p) => p.id === state.activeId) ?? null;
 
-/** Why a name cannot be used, or null. Names are kept short and are unique on the device. */
-export function nameProblem(name: string, profiles: readonly LocalProfile[]): string | null {
+/**
+ * Why a name cannot be used, or null. Names are kept short and are unique on the device. When a
+ * profile is being edited, `exceptId` is that profile: keeping its own name is not a clash.
+ */
+export function nameProblem(
+  name: string,
+  profiles: readonly LocalProfile[],
+  exceptId?: string,
+): string | null {
   const n = name.trim();
   if (!n) return 'Enter a name.';
   if (n.length > 20) return 'Use 20 characters or fewer.';
-  if (profiles.some((p) => p.name.trim().toLowerCase() === n.toLowerCase()))
+  if (profiles.some((p) => p.id !== exceptId && p.name.trim().toLowerCase() === n.toLowerCase()))
     return 'A profile with this name already exists.';
   return null;
 }
@@ -97,4 +104,27 @@ export function addProfile(name: string, type: string): LocalProfile | null {
 
 export function chooseProfile(id: string): void {
   if (state.profiles.some((p) => p.id === id)) set({ ...state, activeId: id });
+}
+
+/** Changes a profile's name and/or kind. Returns it, or null when it is not here or the name is not allowed. */
+export function updateProfile(id: string, change: { name?: string; type?: string }): LocalProfile | null {
+  const current = state.profiles.find((p) => p.id === id);
+  if (!current) return null;
+  const name = change.name === undefined ? current.name : change.name.trim();
+  if (nameProblem(name, state.profiles, id)) return null;
+  const next: LocalProfile = { ...current, name, type: change.type ?? current.type };
+  set({ ...state, profiles: state.profiles.map((p) => (p.id === id ? next : p)) });
+  return next;
+}
+
+/**
+ * Takes a profile off this browser. If it was the one watching, nobody is: the viewer picks again.
+ * (What the server keeps for it, such as Continue Watching, is not touched: it is kept by the profile's id.)
+ */
+export function removeProfile(id: string): void {
+  if (!state.profiles.some((p) => p.id === id)) return;
+  set({
+    profiles: state.profiles.filter((p) => p.id !== id),
+    activeId: state.activeId === id ? null : state.activeId,
+  });
 }
